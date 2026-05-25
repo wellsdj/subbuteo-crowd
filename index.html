@@ -584,51 +584,51 @@ async function runScan() {
   if (!detectionActive) return;
   setScanPip('scanning');
 
-  const frame = captureFrame();
-  if (!frame) { setScanPip('idle'); scheduleNextScan(); return; }
+  const crops = captureGoalCrops();
+  if (!crops) { setScanPip('idle'); scheduleNextScan(); return; }
 
-  let result;
+  let leftResult, rightResult;
   try {
-    result = await callVision(frame);
+    [leftResult, rightResult] = await Promise.all([
+      callVision(crops.left),
+      callVision(crops.right)
+    ]);
   } catch(err) {
     showScanResult('error', 'API error: ' + err.message, 2000);
-    stopDetection();
+    setScanPip('idle');
+    scheduleNextScan();
     return;
   }
 
   setScanPip('idle');
 
-  const obs  = result.observation || '';
-  const conf = result.confidence  || 'low';
+  const goalResult = [leftResult, rightResult].find(r =>
+    r.inGoal && (r.confidence === 'high' || r.confidence === 'medium')
+  );
 
-  // Ball not seen or very low confidence → red flash, stop
-  if (!result.ballSeen || conf === 'low') {
-    showScanResult('error', obs || 'Can\'t see the ball', 1800);
-    setTimeout(stopDetection, 400); // let flash show briefly first
+  if (goalResult) {
+    const now = Date.now();
+    if (now - lastGoalTime > GOAL_COOLDOWN) {
+      lastGoalTime = now;
+      showScanResult('ok', 'GOAL — ' + goalResult.observation, 1000);
+      setTimeout(() => {
+        triggerReaction('goal', null);
+        showGoalPopup();
+        stopDetection();
+      }, 600);
+    } else {
+      scheduleNextScan();
+    }
     return;
   }
 
-  // Ball seen but not in goal → brief green/amber confirmation
-  if (!result.inGoal) {
-    const tone = conf === 'high' ? 'ok' : 'warn';
-    showScanResult(tone, obs, 1400);
-    scheduleNextScan();
-    return;
-  }
-
-  // GOAL
-  const now = Date.now();
-  if (now - lastGoalTime > GOAL_COOLDOWN) {
-    lastGoalTime = now;
-    showScanResult('ok', 'GOAL — ' + obs, 1000);
-    setTimeout(() => {
-      triggerReaction('goal', null);
-      showGoalPopup();
-      stopDetection();
-    }, 600);
-  } else {
-    scheduleNextScan();
-  }
+  // No goal — show the most informative observation
+  const obs = (leftResult.ballSeen ? leftResult.observation : null)
+           || (rightResult.ballSeen ? rightResult.observation : null)
+           || leftResult.observation
+           || 'No goal detected';
+  showScanResult('ok', obs, 1400);
+  scheduleNextScan();
 }
 
 let scanResultTimer = null;
@@ -642,14 +642,26 @@ function showScanResult(type, text, duration) {
   }, duration);
 }
 
-function captureFrame() {
+function captureGoalCrops() {
   const video = document.getElementById('cameraVideo');
   if (!video.videoWidth) return null;
   const canvas = document.getElementById('captureCanvas');
-  canvas.width = 512;
-  canvas.height = Math.round(512 * video.videoHeight / video.videoWidth);
-  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL('image/jpeg', 0.75).split(',')[1];
+  const ctx = canvas.getContext('2d');
+
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  const cropW = Math.round(vw * 0.35);
+  const outW = 480;
+  const outH = Math.round(outW * vh / cropW);
+
+  function cropSide(srcX) {
+    canvas.width = outW;
+    canvas.height = outH;
+    ctx.drawImage(video, srcX, 0, cropW, vh, 0, 0, outW, outH);
+    return canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+  }
+
+  return { left: cropSide(0), right: cropSide(vw - cropW) };
 }
 
 async function callVision(base64Jpg) {

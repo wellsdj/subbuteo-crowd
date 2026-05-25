@@ -1,22 +1,21 @@
-const VISION_PROMPT = `You are analysing a photo of a Subbuteo tabletop football game.
+const GOAL_CROP_PROMPT = `You are looking at a cropped image showing ONE GOAL END of a Subbuteo tabletop football pitch.
 
-THE BALL: a small sphere, about 1 cm diameter, white or off-white, sits on the green felt and casts a small round shadow. It is THREE-DIMENSIONAL. It is SMALLER than any player figure base. There is only ONE ball.
+THE BALL is a soccer ball — very round, slightly smaller than the player figures on the pitch. It sits on the green felt surface. There is only ONE ball on the entire pitch.
 
-PLAYER BASES: large flat circular discs pressed against the felt, 2-3 cm diameter. Much bigger than the ball. Do not confuse these with the ball.
+PLAYER FIGURES stand on large flat circular bases. The ball is rounder and slightly smaller than these bases. Do not confuse a player base with the ball.
 
-HUMAN HANDS: may be visible in the frame. Ignore them completely.
+HUMAN HANDS may be visible in the frame — ignore them completely.
 
-Answer these two questions:
-1. Can you see the ball anywhere in the image?
-2. If yes — is it clearly inside a goal net? (The goal net is a rectangular frame at either short end of the pitch. The ball must be past the goal line, inside the net structure, not just in front of the posts.)
+YOUR QUESTION: Is the soccer ball currently inside the goal net shown in this image?
+
+Rules:
+- The ball must be PAST the goal line, inside the net structure — not in front of the posts
+- A ball sitting in front of or beside the goal does NOT count as a goal
+- If you are not confident, say inGoal: false — do not guess
+- ballSeen means you can see the ball anywhere in this cropped image
 
 Respond ONLY with valid JSON, no other text:
-{
-  "ballSeen": true or false,
-  "inGoal": true or false,
-  "confidence": "high" or "medium" or "low",
-  "observation": "One sentence describing exactly what you see, e.g. Ball visible near centre circle or Ball inside left goal net or No ball visible"
-}`;
+{"inGoal": true or false, "ballSeen": true or false, "confidence": "high" or "medium" or "low", "observation": "one sentence describing exactly what you see"}`;
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -41,7 +40,7 @@ module.exports = async function handler(req, res) {
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: image } },
-          { type: 'text',  text: VISION_PROMPT }
+          { type: 'text',  text: GOAL_CROP_PROMPT }
         ]
       }]
     })
