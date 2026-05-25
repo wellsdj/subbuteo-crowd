@@ -1,32 +1,22 @@
-const VISION_PROMPT = `You are checking a single yes/no question about a Subbuteo tabletop football game.
+const VISION_PROMPT = `You are analysing a photo of a Subbuteo tabletop football game.
 
-QUESTION: Is the Subbuteo ball currently INSIDE either goal net?
+THE BALL: a small sphere, about 1 cm diameter, white or off-white, sits on the green felt and casts a small round shadow. It is THREE-DIMENSIONAL. It is SMALLER than any player figure base. There is only ONE ball.
 
-WHAT THE BALL LOOKS LIKE:
-- Small sphere, approximately 1 cm diameter
-- White or off-white colour
-- Sits on top of the felt — it is THREE-DIMENSIONAL, casting a small round shadow
-- It is SMALLER than any player figure base
-- There is only ONE ball on the pitch
+PLAYER BASES: large flat circular discs pressed against the felt, 2-3 cm diameter. Much bigger than the ball. Do not confuse these with the ball.
 
-WHAT PLAYER FIGURES LOOK LIKE (do NOT confuse with the ball):
-- Plastic figures standing on large flat circular bases (~2-3 cm diameter)
-- The bases are flat discs pressed against the felt
-- Much larger than the ball
-- There are many of them arranged across the pitch
+HUMAN HANDS: may be visible in the frame. Ignore them completely.
 
-WHAT COUNTS AS A GOAL:
-- The ball must be INSIDE the goal net, behind the goal line
-- The goal is a rectangular frame/net at either SHORT end of the pitch
-- The ball must be visibly past the goal posts/crossbar, inside the net structure
-- A ball sitting IN FRONT of the goal (between the goal and the pitch) does NOT count
-- Human hands may be visible — ignore them completely
-
-IMPORTANT: If you can see the ball clearly in the middle of the pitch or near players, that is NOT a goal.
-Only answer true if the ball is visibly inside a goal net.
+Answer these two questions:
+1. Can you see the ball anywhere in the image?
+2. If yes — is it clearly inside a goal net? (The goal net is a rectangular frame at either short end of the pitch. The ball must be past the goal line, inside the net structure, not just in front of the posts.)
 
 Respond ONLY with valid JSON, no other text:
-{"inGoal": true or false, "confidence": "high", "medium", or "low"}`;
+{
+  "ballSeen": true or false,
+  "inGoal": true or false,
+  "confidence": "high" or "medium" or "low",
+  "observation": "One sentence describing exactly what you see, e.g. Ball visible near centre circle or Ball inside left goal net or No ball visible"
+}`;
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -46,7 +36,7 @@ module.exports = async function handler(req, res) {
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 60,
+      max_tokens: 120,
       messages: [{
         role: 'user',
         content: [

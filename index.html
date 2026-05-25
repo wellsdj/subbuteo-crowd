@@ -120,6 +120,21 @@
   .start-btn:hover { opacity: 0.85; }
   .camera-hint { font-size: 12px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
 
+  /* ── Scan result bubble ── */
+  .scan-result {
+    position: absolute; bottom: 14px;
+    left: 50%; transform: translateX(-50%);
+    border-radius: 10px; padding: 10px 18px;
+    font-size: 13px; font-weight: 600; color: #fff;
+    pointer-events: none; opacity: 0; transition: opacity 0.2s;
+    max-width: 88%; text-align: center; z-index: 10;
+  }
+  .scan-result.show  { opacity: 1; }
+  .scan-result.ok    { background: rgba(34,197,94,0.92); }
+  .scan-result.warn  { background: rgba(245,158,11,0.92); }
+  .scan-result.error { background: rgba(239,68,68,0.95); animation: red-flash 0.35s infinite alternate; }
+  @keyframes red-flash { from{opacity:1} to{opacity:0.5} }
+
   /* scanning indicator — top-right corner of camera */
   .scan-pip {
     position: absolute; top: 14px; right: 14px;
@@ -234,6 +249,9 @@
 
     <!-- Active: stop button top-left -->
     <button class="stop-btn" id="stopBtn" onclick="stopDetection()">&#x25A0; Stop</button>
+
+    <!-- Scan result bubble -->
+    <div class="scan-result" id="scanResult"></div>
 
     <!-- Scanning pip top-right -->
     <div class="scan-pip" id="scanPip">
@@ -565,25 +583,63 @@ function scheduleNextScan() {
 async function runScan() {
   if (!detectionActive) return;
   setScanPip('scanning');
+
   const frame = captureFrame();
-  if (frame) {
-    try {
-      const result = await callVision(frame);
-      if (result.inGoal && (result.confidence === 'high' || result.confidence === 'medium')) {
-        const now = Date.now();
-        if (now - lastGoalTime > GOAL_COOLDOWN) {
-          lastGoalTime = now;
-          triggerReaction('goal', null);
-          showGoalPopup();
-          // Pause detection after goal so player can set up
-          stopDetection();
-          return;
-        }
-      }
-    } catch(e) { /* silent — just retry next scan */ }
+  if (!frame) { setScanPip('idle'); scheduleNextScan(); return; }
+
+  let result;
+  try {
+    result = await callVision(frame);
+  } catch(err) {
+    showScanResult('error', 'API error: ' + err.message, 2000);
+    stopDetection();
+    return;
   }
+
   setScanPip('idle');
-  scheduleNextScan();
+
+  const obs  = result.observation || '';
+  const conf = result.confidence  || 'low';
+
+  // Ball not seen or very low confidence → red flash, stop
+  if (!result.ballSeen || conf === 'low') {
+    showScanResult('error', obs || 'Can\'t see the ball', 1800);
+    setTimeout(stopDetection, 400); // let flash show briefly first
+    return;
+  }
+
+  // Ball seen but not in goal → brief green/amber confirmation
+  if (!result.inGoal) {
+    const tone = conf === 'high' ? 'ok' : 'warn';
+    showScanResult(tone, obs, 1400);
+    scheduleNextScan();
+    return;
+  }
+
+  // GOAL
+  const now = Date.now();
+  if (now - lastGoalTime > GOAL_COOLDOWN) {
+    lastGoalTime = now;
+    showScanResult('ok', 'GOAL — ' + obs, 1000);
+    setTimeout(() => {
+      triggerReaction('goal', null);
+      showGoalPopup();
+      stopDetection();
+    }, 600);
+  } else {
+    scheduleNextScan();
+  }
+}
+
+let scanResultTimer = null;
+function showScanResult(type, text, duration) {
+  const el = document.getElementById('scanResult');
+  el.textContent = text;
+  el.className = 'scan-result show ' + type;
+  clearTimeout(scanResultTimer);
+  scanResultTimer = setTimeout(() => {
+    el.classList.remove('show');
+  }, duration);
 }
 
 function captureFrame() {
