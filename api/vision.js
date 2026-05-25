@@ -1,40 +1,32 @@
-const VISION_PROMPT = `You are analysing a camera shot of a Subbuteo tabletop football game. The camera is positioned above and to the side of the pitch at an angle.
+const VISION_PROMPT = `You are checking a single yes/no question about a Subbuteo tabletop football game.
 
-IMPORTANT — IGNORE HUMANS: There will likely be people, hands, or fingers visible in the frame (players flicking figures, reaching over the table). Ignore all human body parts completely. Only analyse the green felt pitch and what is on it.
+QUESTION: Is the Subbuteo ball currently INSIDE either goal net?
 
-WHAT IS ON THE PITCH:
-- White painted lines: centre circle/line, and a penalty area box near each goal
-- Small plastic player figures (~2-3 cm) on circular bases
-- One small round ball (~1 cm), usually white or off-white — smaller than the player bases
-- Two rectangular goal frames/nets at each SHORT end of the pitch
+WHAT THE BALL LOOKS LIKE:
+- Small sphere, approximately 1 cm diameter
+- White or off-white colour
+- Sits on top of the felt — it is THREE-DIMENSIONAL, casting a small round shadow
+- It is SMALLER than any player figure base
+- There is only ONE ball on the pitch
 
-HOW TO CLASSIFY — use the white painted lines, not pixel position:
+WHAT PLAYER FIGURES LOOK LIKE (do NOT confuse with the ball):
+- Plastic figures standing on large flat circular bases (~2-3 cm diameter)
+- The bases are flat discs pressed against the felt
+- Much larger than the ball
+- There are many of them arranged across the pitch
 
-  "in-goal"     — ball is inside or past the goal frame. If the ball is touching or beyond the goal posts, use this. HIGHEST PRIORITY.
-  "inline-goal" — ball is in the penalty area, on the central axis directly facing the goal mouth (straight-on shot)
-  "near-goal"   — ball is inside the penalty area box OR very close to the penalty area line on either end
-  "midfield"    — ball is clearly between the two penalty areas, in the central zone
-  "not-visible" — cannot locate the ball
+WHAT COUNTS AS A GOAL:
+- The ball must be INSIDE the goal net, behind the goal line
+- The goal is a rectangular frame/net at either SHORT end of the pitch
+- The ball must be visibly past the goal posts/crossbar, inside the net structure
+- A ball sitting IN FRONT of the goal (between the goal and the pitch) does NOT count
+- Human hands may be visible — ignore them completely
 
-CAMERA ANGLE: The pitch will look like a trapezoid due to perspective. The penalty area lines are still visible — use them as your zone boundaries. The far end of the pitch will appear smaller/higher in the frame.
+IMPORTANT: If you can see the ball clearly in the middle of the pitch or near players, that is NOT a goal.
+Only answer true if the ball is visibly inside a goal net.
 
-STRICT RULES — these override everything else:
-1. If the ball is anywhere inside a penalty area box → "near-goal" minimum (not midfield)
-2. If the ball is touching/inside a goal frame → "in-goal" (not near-goal)
-3. When unsure between midfield and near-goal → choose near-goal
-4. When unsure between near-goal and in-goal → choose in-goal
-5. Human hands near the pitch do not affect classification
-
-KEEPER BLOCKING: true only if the goalkeeper figure is clearly between ball and goal.
-
-CONFIDENCE: "high" if ball clearly visible and zone certain. "medium" if fairly sure. "low" if genuinely unsure.
-
-Respond ONLY with valid JSON:
-{
-  "ballPosition": "in-goal" | "inline-goal" | "near-goal" | "midfield" | "not-visible",
-  "keeperBlocking": true | false,
-  "confidence": "high" | "medium" | "low"
-}`;
+Respond ONLY with valid JSON, no other text:
+{"inGoal": true or false, "confidence": "high", "medium", or "low"}`;
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -54,7 +46,7 @@ module.exports = async function handler(req, res) {
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 120,
+      max_tokens: 60,
       messages: [{
         role: 'user',
         content: [
