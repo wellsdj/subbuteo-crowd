@@ -10,13 +10,19 @@ WHAT YOU ARE LOOKING AT:
 YOUR TASK — find the ball. It is the smallest round object on the pitch, NOT a player base.
 Scan the entire image carefully before deciding. The ball may be partially obscured by a figure.
 
-ZONES (based on horizontal position across the pitch):
-- "in-left-goal"    — ball is inside or touching the left goal net/frame
-- "near-left-goal"  — ball is in the left-side attacking third, within shooting range of the left goal (roughly the leftmost 25% of the pitch)
-- "midfield"        — ball is in the central 50% of the pitch
-- "near-right-goal" — ball is in the right-side attacking third, within shooting range of the right goal (roughly the rightmost 25% of the pitch)
-- "in-right-goal"   — ball is inside or touching the right goal net/frame
-- "not-visible"     — you genuinely cannot locate the ball after careful inspection
+ZONES — classify the ball into exactly one of these (horizontal position across the pitch):
+- "in-left-goal"      — ball is inside or touching the left goal net/frame
+- "inline-left-goal"  — ball is directly in line with the left goal mouth, central to it, in a clear shooting position (like a penalty spot or straight-on shot) — the leftmost ~15% of the pitch, centred on the goal
+- "near-left-goal"    — ball is in the left attacking third (~leftmost 25%) but at a wide angle, not straight-on to goal
+- "midfield"          — ball is in the central ~50% of the pitch
+- "near-right-goal"   — ball is in the right attacking third (~rightmost 25%) but at a wide angle
+- "inline-right-goal" — ball is directly in line with the right goal mouth, straight-on shooting position
+- "in-right-goal"     — ball is inside or touching the right goal net/frame
+- "not-visible"       — you genuinely cannot locate the ball after careful inspection
+
+KEY DISTINCTION between "inline" and "near":
+- INLINE = ball is directly facing the goal mouth head-on, on the central axis, a player could shoot straight in
+- NEAR   = ball is in the attacking third but off to the side or at an angle
 
 KEEPER BLOCKING: set true only if a goalkeeper figure is clearly positioned between the ball and the goal mouth it is threatening.
 
@@ -27,7 +33,7 @@ CONFIDENCE:
 
 Respond ONLY with a valid JSON object, no other text:
 {
-  "ballPosition": "in-left-goal" | "near-left-goal" | "midfield" | "near-right-goal" | "in-right-goal" | "not-visible",
+  "ballPosition": "in-left-goal" | "inline-left-goal" | "near-left-goal" | "midfield" | "near-right-goal" | "inline-right-goal" | "in-right-goal" | "not-visible",
   "keeperBlocking": true | false,
   "confidence": "high" | "medium" | "low"
 }`;

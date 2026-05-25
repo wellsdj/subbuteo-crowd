@@ -998,27 +998,28 @@ async function checkPassword(e) {
 
 // Vision prompt lives server-side in api/vision.js
 
-// In normal mode we poll every 5 s (sequential).
-// When the ball enters shooting range we switch to a PIPELINED mode:
-// frames are captured every 500 ms and API calls are fired without
-// waiting for the previous response. Results are processed as they
-// arrive; stale responses (superseded by a newer one) are discarded.
-// Audio buffers are preloaded the moment the camera starts so the
-// crowd reaction fires with zero audio-init delay.
+// Three scan tiers:
+//   normal  — 5 s sequential poll (midfield)
+//   near    — 2 s pipelined (ball in attacking third, wide angle)
+//   inline  — 1 s pipelined (ball straight-on in front of goal)
+// Pipelined = frames fired without awaiting previous API response;
+// stale results discarded via sequence numbers.
+// Audio buffers preloaded on camera start for zero-latency playback.
 
 const NORMAL_INTERVAL  = 5000;
-const FAST_CAPTURE_MS  = 500;   // frame capture rate when near goal
+const NEAR_MS          = 2000;  // capture rate: attacking third
+const INLINE_MS        = 1000;  // capture rate: inline / straight-on
 const EVENT_COOLDOWN   = 12000;
 
 let visionActive       = false;
-let visionNearGoalMode = false;
-let visionTimer        = null;  // setTimeout (normal) or setInterval (fast)
+let visionMode         = 'normal'; // 'normal' | 'near' | 'inline'
+let visionTimer        = null;
 let visionStream       = null;
 let lastBallPosition   = 'midfield';
 let lastKeeperBlocking = false;
 let lastEventTime      = 0;
-let scanSeq            = 0;     // monotonically increasing frame counter
-let lastHandledSeq     = 0;     // last seq we processed a result for
+let scanSeq            = 0;
+let lastHandledSeq     = 0;
 
 async function toggleVision() {
   if (!visionActive) {
@@ -1060,8 +1061,8 @@ function stopVision() {
     visionStream.getTracks().forEach(t => t.stop());
     visionStream = null;
   }
-  visionActive       = false;
-  visionNearGoalMode = false;
+  visionActive = false;
+  visionMode   = 'normal';
   document.getElementById('cameraWrap').style.display = 'none';
   const btn = document.getElementById('visionToggle');
   btn.textContent = '📷 START';
@@ -1076,13 +1077,14 @@ function stopVision() {
 function enterNormalMode() {
   if (!visionActive) return;
   clearInterval(visionTimer);
-  visionNearGoalMode = false;
+  clearTimeout(visionTimer);
+  visionMode = 'normal';
   setVisionStatus('🔍 Scanning every 5s…', 'scanning');
   visionTimer = setTimeout(runNormalScan, NORMAL_INTERVAL);
 }
 
 async function runNormalScan() {
-  if (!visionActive || visionNearGoalMode) return;
+  if (!visionActive || visionMode !== 'normal') return;
   const frame = captureFrame();
   if (frame) {
     setVisionStatus('🤖 Analysing…', 'analysing');
@@ -1094,36 +1096,45 @@ async function runNormalScan() {
       setVisionStatus('⚠ API error', 'error');
     }
   }
-  if (visionActive && !visionNearGoalMode) {
+  if (visionActive && visionMode === 'normal') {
     visionTimer = setTimeout(runNormalScan, NORMAL_INTERVAL);
   }
 }
 
-// ── Fast mode: pipelined scans every 500 ms when near goal ───────────────────
-// Frames are captured on a fixed interval and sent without waiting for the
-// previous response. Each call tags its frame with a sequence number; when
-// a response arrives, it's only processed if no newer response has already
-// been handled (stale results are discarded).
+// ── Pipelined modes: near (2 s) and inline (1 s) ─────────────────────────────
+// Frames fired on a fixed interval without awaiting previous API response.
+// Stale responses discarded via sequence numbers.
 
-function enterFastMode() {
-  if (!visionActive || visionNearGoalMode) return;
+function enterNearMode() {
+  if (!visionActive || visionMode === 'near') return;
   clearTimeout(visionTimer);
-  visionNearGoalMode = true;
-  setVisionStatus('⚡ Near goal — scanning fast', 'near-goal');
-  logVision('⚡ Ball in shooting range — fast scan mode');
-  // Fire immediately, then on interval
-  fireFastScan();
-  visionTimer = setInterval(fireFastScan, FAST_CAPTURE_MS);
+  clearInterval(visionTimer);
+  visionMode = 'near';
+  setVisionStatus('⚡ Shooting range — 2s scan', 'near-goal');
+  logVision('⚡ Ball in shooting range — 2 s scan');
+  firePipelinedScan();
+  visionTimer = setInterval(firePipelinedScan, NEAR_MS);
 }
 
-function fireFastScan() {
+function enterInlineMode() {
+  if (!visionActive || visionMode === 'inline') return;
+  clearTimeout(visionTimer);
+  clearInterval(visionTimer);
+  visionMode = 'inline';
+  setVisionStatus('🎯 Inline — 1s scan', 'near-goal');
+  logVision('🎯 Player inline — 1 s scan');
+  firePipelinedScan();
+  visionTimer = setInterval(firePipelinedScan, INLINE_MS);
+}
+
+function firePipelinedScan() {
   if (!visionActive) return;
   const frame = captureFrame();
   if (!frame) return;
   const seq = ++scanSeq;
   callVisionAPI(frame)
     .then(result => {
-      if (seq <= lastHandledSeq) return; // stale — a newer result already processed
+      if (seq <= lastHandledSeq) return; // stale
       lastHandledSeq = seq;
       handleVisionResult(result);
     })
@@ -1163,35 +1174,35 @@ function handleVisionResult(result) {
   const keeper = !!result.keeperBlocking;
   const conf   = result.confidence     || 'low';
 
-  const inGoal   = pos === 'in-left-goal'   || pos === 'in-right-goal';
-  const nearGoal = pos === 'near-left-goal' || pos === 'near-right-goal';
-  const danger   = inGoal || nearGoal;
+  const inGoal   = pos === 'in-left-goal'      || pos === 'in-right-goal';
+  const inline   = pos === 'inline-left-goal'  || pos === 'inline-right-goal';
+  const near     = pos === 'near-left-goal'    || pos === 'near-right-goal';
 
-  // Switch scan mode based on ball position
-  if (danger && !visionNearGoalMode) {
-    enterFastMode();
-  } else if (!danger && visionNearGoalMode) {
+  // Switch scan tier based on ball position
+  if (inline && visionMode !== 'inline') {
+    enterInlineMode();
+  } else if ((near || inGoal) && visionMode === 'normal') {
+    enterNearMode();
+  } else if (!inline && !near && !inGoal && visionMode !== 'normal') {
     logVision('Ball clear — back to 5 s scan');
-    clearInterval(visionTimer);
-    visionNearGoalMode = false;
     enterNormalMode();
-  } else if (danger) {
-    setVisionStatus('⚡ Near goal — scanning fast', 'near-goal');
   }
 
   setBallBadge(pos);
   logVision(`Ball: ${pos} | Keeper: ${keeper ? 'blocking' : 'clear'} | Conf: ${conf}`);
 
-  // Event detection — only fire with non-low confidence and after cooldown
+  // Event detection — only with non-low confidence and after cooldown
   const now = Date.now();
   const cooldownOk = (now - lastEventTime) > EVENT_COOLDOWN;
   if (cooldownOk && conf !== 'low') {
-    const prevNear = lastBallPosition === 'near-left-goal' || lastBallPosition === 'near-right-goal';
-    const prevIn   = lastBallPosition === 'in-left-goal'   || lastBallPosition === 'in-right-goal';
+    const prevInGoal  = lastBallPosition === 'in-left-goal'     || lastBallPosition === 'in-right-goal';
+    const prevDanger  = prevInGoal
+      || lastBallPosition === 'inline-left-goal'  || lastBallPosition === 'inline-right-goal'
+      || lastBallPosition === 'near-left-goal'    || lastBallPosition === 'near-right-goal';
 
-    if (inGoal && !prevIn) {
+    if (inGoal && !prevInGoal) {
       fireEvent('goal', '🥅 GOAL detected by AI!');
-    } else if (prevNear && !nearGoal && !inGoal) {
+    } else if (prevDanger && !prevInGoal && !inline && !near && !inGoal) {
       if (keeper || lastKeeperBlocking) {
         fireEvent('save', '🧤 GREAT SAVE detected by AI!');
       } else {
@@ -1218,12 +1229,14 @@ function setVisionStatus(text, cls) {
 
 function setBallBadge(pos) {
   const badge = document.getElementById('ballBadge');
-  const inGoal   = pos === 'in-left-goal' || pos === 'in-right-goal';
-  const nearGoal = pos === 'near-left-goal' || pos === 'near-right-goal';
+  const inGoal = pos === 'in-left-goal'     || pos === 'in-right-goal';
+  const inline = pos === 'inline-left-goal' || pos === 'inline-right-goal';
+  const near   = pos === 'near-left-goal'   || pos === 'near-right-goal';
   badge.textContent = '● ' + pos.replace(/-/g, ' ').toUpperCase();
   badge.className = 'vision-badge' +
-    (inGoal   ? ' in-goal-ind'   :
-     nearGoal  ? ' near-goal-ind' :
+    (inGoal  ? ' in-goal-ind'   :
+     inline  ? ' in-goal-ind'   :
+     near    ? ' near-goal-ind' :
      pos !== 'not-visible' ? ' ball-visible' : '');
 }
 
