@@ -1191,18 +1191,30 @@ function handleVisionResult(result) {
   setBallBadge(pos);
   logVision(`Ball: ${pos} | Keeper: ${keeper ? 'blocking' : 'clear'} | Conf: ${conf}`);
 
-  // Event detection — only with non-low confidence and after cooldown
+  // Event detection
   const now = Date.now();
   const cooldownOk = (now - lastEventTime) > EVENT_COOLDOWN;
-  if (cooldownOk && conf !== 'low') {
+  if (cooldownOk) {
     const prevInGoal  = lastBallPosition === 'in-left-goal'     || lastBallPosition === 'in-right-goal';
-    const prevDanger  = prevInGoal
-      || lastBallPosition === 'inline-left-goal'  || lastBallPosition === 'inline-right-goal'
-      || lastBallPosition === 'near-left-goal'    || lastBallPosition === 'near-right-goal';
+    const prevInline  = lastBallPosition === 'inline-left-goal' || lastBallPosition === 'inline-right-goal';
+    const prevNear    = lastBallPosition === 'near-left-goal'   || lastBallPosition === 'near-right-goal';
+    const danger      = inGoal || inline || near;
 
-    if (inGoal && !prevInGoal) {
+    if (inGoal && !prevInGoal && conf !== 'low') {
+      // Ball newly inside goal
       fireEvent('goal', '🥅 GOAL detected by AI!');
-    } else if (prevDanger && !prevInGoal && !inline && !near && !inGoal) {
+
+    } else if (prevInline && !danger && pos === 'not-visible') {
+      // Was lined up to shoot, ball vanished — missed shot
+      // Fires regardless of confidence (ball disappearing IS the signal)
+      if (keeper || lastKeeperBlocking) {
+        fireEvent('save', '🧤 GREAT SAVE detected by AI!');
+      } else {
+        fireEvent('nearmiss', '😬 Missed shot — ball gone after inline position!');
+      }
+
+    } else if ((prevInline || prevNear) && !prevInGoal && !danger && pos !== 'not-visible' && conf !== 'low') {
+      // Ball moved away from danger zone to a visible position without scoring
       if (keeper || lastKeeperBlocking) {
         fireEvent('save', '🧤 GREAT SAVE detected by AI!');
       } else {
