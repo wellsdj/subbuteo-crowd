@@ -523,10 +523,57 @@
     pointer-events: none;
     display: flex;
     align-items: flex-start;
-    justify-content: flex-end;
+    justify-content: space-between;
     padding: 8px;
-    gap: 6px;
-    flex-wrap: wrap;
+  }
+
+  /* Scan countdown ring — bottom-left of camera feed */
+  .scan-ring-wrap {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    width: 52px;
+    height: 52px;
+  }
+  .scan-ring-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .scan-ring-track {
+    fill: none;
+    stroke: rgba(255,255,255,0.08);
+    stroke-width: 4;
+  }
+  .scan-ring-fill {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-dasharray: 126;      /* 2π × r(20) ≈ 125.7 */
+    stroke-dashoffset: 0;
+    transition: stroke 0.4s;
+  }
+  .scan-ring-fill.mode-near   { stroke: var(--amber); }
+  .scan-ring-fill.mode-inline { stroke: var(--red); }
+  .scan-ring-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Bebas Neue', sans-serif;
+    line-height: 1;
+  }
+  .scan-ring-secs {
+    font-size: 18px;
+    color: #fff;
+  }
+  .scan-ring-unit {
+    font-size: 8px;
+    letter-spacing: 1px;
+    color: rgba(255,255,255,0.4);
+    text-transform: uppercase;
+  }
+  .scan-ring-wrap.flash .scan-ring-fill {
+    stroke: #fff;
   }
   .vision-badge {
     font-size: 10px;
@@ -651,6 +698,18 @@
       <canvas id="captureCanvas" style="display:none"></canvas>
       <div class="vision-overlay">
         <div class="vision-badge" id="ballBadge">● NO BALL</div>
+      </div>
+
+      <!-- Scan countdown ring -->
+      <div class="scan-ring-wrap" id="scanRingWrap">
+        <svg viewBox="0 0 52 52">
+          <circle class="scan-ring-track" cx="26" cy="26" r="20"/>
+          <circle class="scan-ring-fill" id="scanRingFill" cx="26" cy="26" r="20"/>
+        </svg>
+        <div class="scan-ring-label">
+          <span class="scan-ring-secs" id="scanRingSecs">5</span>
+          <span class="scan-ring-unit">sec</span>
+        </div>
       </div>
     </div>
 
@@ -1061,6 +1120,7 @@ function stopVision() {
     visionStream.getTracks().forEach(t => t.stop());
     visionStream = null;
   }
+  cancelAnimationFrame(ringAnimFrame);
   visionActive = false;
   visionMode   = 'normal';
   document.getElementById('cameraWrap').style.display = 'none';
@@ -1080,6 +1140,7 @@ function enterNormalMode() {
   clearTimeout(visionTimer);
   visionMode = 'normal';
   setVisionStatus('🔍 Scanning every 5s…', 'scanning');
+  startRingCountdown(NORMAL_INTERVAL, 'normal');
   visionTimer = setTimeout(runNormalScan, NORMAL_INTERVAL);
 }
 
@@ -1087,6 +1148,7 @@ async function runNormalScan() {
   if (!visionActive || visionMode !== 'normal') return;
   const frame = captureFrame();
   if (frame) {
+    flashRing();
     setVisionStatus('🤖 Analysing…', 'analysing');
     try {
       const result = await callVisionAPI(frame);
@@ -1097,13 +1159,12 @@ async function runNormalScan() {
     }
   }
   if (visionActive && visionMode === 'normal') {
+    startRingCountdown(NORMAL_INTERVAL, 'normal');
     visionTimer = setTimeout(runNormalScan, NORMAL_INTERVAL);
   }
 }
 
 // ── Pipelined modes: near (2 s) and inline (1 s) ─────────────────────────────
-// Frames fired on a fixed interval without awaiting previous API response.
-// Stale responses discarded via sequence numbers.
 
 function enterNearMode() {
   if (!visionActive || visionMode === 'near') return;
@@ -1112,6 +1173,7 @@ function enterNearMode() {
   visionMode = 'near';
   setVisionStatus('⚡ Shooting range — 2s scan', 'near-goal');
   logVision('⚡ Ball in shooting range — 2 s scan');
+  startRingCountdown(NEAR_MS, 'near');
   firePipelinedScan();
   visionTimer = setInterval(firePipelinedScan, NEAR_MS);
 }
@@ -1123,6 +1185,7 @@ function enterInlineMode() {
   visionMode = 'inline';
   setVisionStatus('🎯 Inline — 1s scan', 'near-goal');
   logVision('🎯 Player inline — 1 s scan');
+  startRingCountdown(INLINE_MS, 'inline');
   firePipelinedScan();
   visionTimer = setInterval(firePipelinedScan, INLINE_MS);
 }
@@ -1131,14 +1194,48 @@ function firePipelinedScan() {
   if (!visionActive) return;
   const frame = captureFrame();
   if (!frame) return;
+  flashRing();
   const seq = ++scanSeq;
   callVisionAPI(frame)
     .then(result => {
-      if (seq <= lastHandledSeq) return; // stale
+      if (seq <= lastHandledSeq) return;
       lastHandledSeq = seq;
       handleVisionResult(result);
     })
     .catch(err => logVision('⚠ ' + err.message));
+}
+
+// ── Scan ring countdown ───────────────────────────────────────────────────────
+
+let ringAnimFrame = null;
+const RING_CIRCUMFERENCE = 126; // 2π × r(20)
+
+function startRingCountdown(durationMs, mode) {
+  cancelAnimationFrame(ringAnimFrame);
+  const fill  = document.getElementById('scanRingFill');
+  const label = document.getElementById('scanRingSecs');
+  if (!fill) return;
+
+  fill.className = 'scan-ring-fill' + (mode !== 'normal' ? ' mode-' + mode : '');
+  label.textContent = Math.round(durationMs / 1000);
+
+  const start = performance.now();
+  function tick(now) {
+    const elapsed  = now - start;
+    const progress = Math.min(elapsed / durationMs, 1);
+    fill.style.strokeDashoffset = RING_CIRCUMFERENCE * progress;
+    const secsLeft = Math.max(0, Math.ceil((durationMs - elapsed) / 1000));
+    label.textContent = secsLeft;
+    if (progress < 1) ringAnimFrame = requestAnimationFrame(tick);
+  }
+  ringAnimFrame = requestAnimationFrame(tick);
+}
+
+function flashRing() {
+  const wrap = document.getElementById('scanRingWrap');
+  if (!wrap) return;
+  wrap.classList.add('flash');
+  setTimeout(() => wrap.classList.remove('flash'), 180);
 }
 
 function captureFrame() {
