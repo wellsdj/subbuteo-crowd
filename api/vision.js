@@ -1,39 +1,37 @@
-const VISION_PROMPT = `You are analysing a live overhead or angled shot of a Subbuteo tabletop football game.
+const VISION_PROMPT = `You are analysing a live camera shot of a Subbuteo tabletop football game.
 
 WHAT YOU ARE LOOKING AT:
-- A rectangular green felt playing surface (the pitch)
-- Small plastic player figures, roughly 2–3 cm tall, on circular bases
-- One small round ball, roughly 1 cm diameter — usually white, off-white, or light-coloured
-- Two small rectangular goal frames, one at each short end of the table (left end and right end)
-- The goalkeeper is a single figure lying flat or on a small rod inside each goal mouth
+- A rectangular green felt pitch
+- Small plastic player figures (~2-3 cm tall) on circular bases — these are NOT the ball
+- One small round ball, ~1 cm diameter, usually white or off-white
+- Two small rectangular goal frames/nets, one at each SHORT end of the table
+- A goalkeeper figure inside each goal mouth
 
-YOUR TASK — find the ball. It is the smallest round object on the pitch, NOT a player base.
-Scan the entire image carefully before deciding. The ball may be partially obscured by a figure.
+STEP 1 — Find the goals. They are the small rectangular net structures at the two short ends of the table.
+STEP 2 — Find the ball. It is the smallest round object on the pitch. Scan carefully — it may be near a figure.
+STEP 3 — Classify using EXACTLY one of these zones:
 
-ZONES — classify the ball into exactly one of these (horizontal position across the pitch):
-- "in-left-goal"      — ball is inside or touching the left goal net/frame
-- "inline-left-goal"  — ball is directly in line with the left goal mouth, central to it, in a clear shooting position (like a penalty spot or straight-on shot) — the leftmost ~15% of the pitch, centred on the goal
-- "near-left-goal"    — ball is in the left attacking third (~leftmost 25%) but at a wide angle, not straight-on to goal
-- "midfield"          — ball is in the central ~50% of the pitch
-- "near-right-goal"   — ball is in the right attacking third (~rightmost 25%) but at a wide angle
-- "inline-right-goal" — ball is directly in line with the right goal mouth, straight-on shooting position
-- "in-right-goal"     — ball is inside or touching the right goal net/frame
-- "not-visible"       — you genuinely cannot locate the ball after careful inspection
+  "in-goal"     — ball is INSIDE a goal net or has clearly crossed the goal line. HIGHEST PRIORITY — if the ball is touching or past the goal frame, use this. Do not use "near-goal" when the ball is in the net.
+  "inline-goal" — ball is directly in front of a goal mouth on a central straight shooting line (like a penalty). NOT yet in the net.
+  "near-goal"   — ball is within roughly the nearest 25% of the pitch to EITHER goal end, but at an angle or wider position
+  "midfield"    — ball is in the central 50% of the pitch, clearly away from both goals
+  "not-visible" — you cannot locate the ball after careful inspection
 
-KEY DISTINCTION between "inline" and "near":
-- INLINE = ball is directly facing the goal mouth head-on, on the central axis, a player could shoot straight in
-- NEAR   = ball is in the attacking third but off to the side or at an angle
-
-KEEPER BLOCKING: set true only if a goalkeeper figure is clearly positioned between the ball and the goal mouth it is threatening.
+KEEPER BLOCKING: true only if a goalkeeper figure is clearly between the ball and the nearest goal.
 
 CONFIDENCE:
-- "high"   — you can clearly see the ball and are certain of its zone
-- "medium" — you can see something that is very likely the ball
-- "low"    — poor lighting, ball obscured, or you are uncertain
+- "high"   — ball clearly visible, zone certain
+- "medium" — ball likely visible, zone fairly certain
+- "low"    — poor lighting, ball hidden, or genuinely unsure
 
-Respond ONLY with a valid JSON object, no other text:
+CRITICAL RULES:
+1. If the ball appears to be inside or past a goal frame — always use "in-goal", never downgrade to "near-goal"
+2. The attacking thirds (near-goal) cover roughly the area between the penalty spot and the goal — if the ball is anywhere in that zone, use "near-goal" not "midfield"
+3. When in doubt between "midfield" and "near-goal", prefer "near-goal"
+
+Respond ONLY with valid JSON, no other text:
 {
-  "ballPosition": "in-left-goal" | "inline-left-goal" | "near-left-goal" | "midfield" | "near-right-goal" | "inline-right-goal" | "in-right-goal" | "not-visible",
+  "ballPosition": "in-goal" | "inline-goal" | "near-goal" | "midfield" | "not-visible",
   "keeperBlocking": true | false,
   "confidence": "high" | "medium" | "low"
 }`;

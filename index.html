@@ -1016,9 +1016,20 @@ async function toggleCrowd() {
 
 // ─── PASSWORD GATE ──────────────────────────────────────────────────────────
 
+async function enterApp() {
+  document.getElementById('splash').style.display = 'none';
+  // Auto-start crowd ambience — this is triggered by a user gesture
+  // (password submit or page load after auth), which satisfies browser autoplay policy
+  if (!isPlaying) {
+    await toggleCrowd();
+  }
+}
+
 (function () {
   if (sessionStorage.getItem('crowdAuth') === '1') {
+    // Already authed — hide splash immediately; audio starts after DOMContentLoaded
     document.getElementById('splash').style.display = 'none';
+    window.addEventListener('DOMContentLoaded', () => toggleCrowd(), { once: true });
   }
 })();
 
@@ -1039,7 +1050,7 @@ async function checkPassword(e) {
     });
     if (resp.ok) {
       sessionStorage.setItem('crowdAuth', '1');
-      document.getElementById('splash').style.display = 'none';
+      await enterApp();
     } else {
       err.textContent = 'Wrong password';
       input.value = '';
@@ -1271,9 +1282,9 @@ function handleVisionResult(result) {
   const keeper = !!result.keeperBlocking;
   const conf   = result.confidence     || 'low';
 
-  const inGoal   = pos === 'in-left-goal'      || pos === 'in-right-goal';
-  const inline   = pos === 'inline-left-goal'  || pos === 'inline-right-goal';
-  const near     = pos === 'near-left-goal'    || pos === 'near-right-goal';
+  const inGoal = pos === 'in-goal';
+  const inline = pos === 'inline-goal';
+  const near   = pos === 'near-goal';
 
   // Switch scan tier based on ball position
   if (inline && visionMode !== 'inline') {
@@ -1292,18 +1303,17 @@ function handleVisionResult(result) {
   const now = Date.now();
   const cooldownOk = (now - lastEventTime) > EVENT_COOLDOWN;
   if (cooldownOk) {
-    const prevInGoal  = lastBallPosition === 'in-left-goal'     || lastBallPosition === 'in-right-goal';
-    const prevInline  = lastBallPosition === 'inline-left-goal' || lastBallPosition === 'inline-right-goal';
-    const prevNear    = lastBallPosition === 'near-left-goal'   || lastBallPosition === 'near-right-goal';
-    const danger      = inGoal || inline || near;
+    const prevInGoal = lastBallPosition === 'in-goal';
+    const prevInline = lastBallPosition === 'inline-goal';
+    const prevNear   = lastBallPosition === 'near-goal';
+    const danger     = inGoal || inline || near;
 
-    if (inGoal && !prevInGoal && conf !== 'low') {
-      // Ball newly inside goal
+    if (inGoal && !prevInGoal) {
+      // Ball newly inside goal — fire regardless of confidence
       fireEvent('goal', '🥅 GOAL detected by AI!');
 
     } else if (prevInline && !danger && pos === 'not-visible') {
       // Was lined up to shoot, ball vanished — missed shot
-      // Fires regardless of confidence (ball disappearing IS the signal)
       if (keeper || lastKeeperBlocking) {
         fireEvent('save', '🧤 GREAT SAVE detected by AI!');
       } else {
@@ -1311,7 +1321,7 @@ function handleVisionResult(result) {
       }
 
     } else if ((prevInline || prevNear) && !prevInGoal && !danger && pos !== 'not-visible' && conf !== 'low') {
-      // Ball moved away from danger zone to a visible position without scoring
+      // Ball moved away from danger zone to a visible non-goal position
       if (keeper || lastKeeperBlocking) {
         fireEvent('save', '🧤 GREAT SAVE detected by AI!');
       } else {
@@ -1338,15 +1348,12 @@ function setVisionStatus(text, cls) {
 
 function setBallBadge(pos) {
   const badge = document.getElementById('ballBadge');
-  const inGoal = pos === 'in-left-goal'     || pos === 'in-right-goal';
-  const inline = pos === 'inline-left-goal' || pos === 'inline-right-goal';
-  const near   = pos === 'near-left-goal'   || pos === 'near-right-goal';
   badge.textContent = '● ' + pos.replace(/-/g, ' ').toUpperCase();
   badge.className = 'vision-badge' +
-    (inGoal  ? ' in-goal-ind'   :
-     inline  ? ' in-goal-ind'   :
-     near    ? ' near-goal-ind' :
-     pos !== 'not-visible' ? ' ball-visible' : '');
+    (pos === 'in-goal'     ? ' in-goal-ind'   :
+     pos === 'inline-goal' ? ' in-goal-ind'   :
+     pos === 'near-goal'   ? ' near-goal-ind' :
+     pos !== 'not-visible' ? ' ball-visible'  : '');
 }
 
 function logVision(msg) {
