@@ -999,7 +999,7 @@ async function checkPassword(e) {
 // Vision prompt lives server-side in api/vision.js
 
 const NORMAL_INTERVAL  = 5000;
-const NEAR_GOAL_INTERVAL = 1000;
+const NEAR_GOAL_INTERVAL = 2000;
 const EVENT_COOLDOWN   = 12000;
 
 let visionActive       = false;
@@ -1119,7 +1119,7 @@ function handleVisionResult(result) {
   if (inGoal || nearGoal) {
     if (visionScanDelay !== NEAR_GOAL_INTERVAL) {
       visionScanDelay = NEAR_GOAL_INTERVAL;
-      logVision('⚡ Ball near goal — scanning every 1 s');
+      logVision('⚡ Ball in shooting range — scanning every 2 s');
     }
     setVisionStatus('⚡ Near goal!', 'near-goal');
   } else {
