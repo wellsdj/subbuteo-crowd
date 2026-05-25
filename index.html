@@ -1076,7 +1076,7 @@ async function checkPassword(e) {
 // stale results discarded via sequence numbers.
 // Audio buffers preloaded on camera start for zero-latency playback.
 
-const NORMAL_INTERVAL  = 5000;
+const NORMAL_INTERVAL  = 3000;
 const NEAR_MS          = 2000;  // capture rate: attacking third
 const INLINE_MS        = 1000;  // capture rate: inline / straight-on
 const EVENT_COOLDOWN   = 12000;
@@ -1118,7 +1118,7 @@ async function startVision() {
     await Promise.all([loadGoalBuffer(), loadNearMissBuffer()]);
 
     enterNormalMode();
-    logVision('Camera ready. Audio preloaded. First scan in 5 s.');
+    logVision('Camera ready. Audio preloaded. First scan in 3 s.');
   } catch (err) {
     logVision('⚠ Camera error: ' + err.message);
   }
@@ -1150,7 +1150,7 @@ function enterNormalMode() {
   clearInterval(visionTimer);
   clearTimeout(visionTimer);
   visionMode = 'normal';
-  setVisionStatus('🔍 Scanning every 5s…', 'scanning');
+  setVisionStatus('🔍 Scanning every 3s…', 'scanning');
   startRingCountdown(NORMAL_INTERVAL, 'normal');
   visionTimer = setTimeout(runNormalScan, NORMAL_INTERVAL);
 }
