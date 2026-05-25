@@ -1,4 +1,4 @@
-export default function handler(req, res) {
+module.exports = function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const { password } = req.body || {};
@@ -7,4 +7,4 @@ export default function handler(req, res) {
   } else {
     res.status(401).json({ ok: false });
   }
-}
+};

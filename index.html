@@ -1337,7 +1337,15 @@ function handleVisionResult(result) {
 function fireEvent(type, msg) {
   lastEventTime = Date.now();
   logVision(msg);
-  triggerReaction(type, null); // audio already preloaded by startVision
+  triggerReaction(type, null);
+
+  if (type === 'goal') {
+    // Give the sound a moment to kick in, then pause vision for kick-off reset
+    setTimeout(() => {
+      stopVision();
+      setVisionStatus('Goal scored — press 📷 START when ready', '');
+    }, 1500);
+  }
 }
 
 function setVisionStatus(text, cls) {
