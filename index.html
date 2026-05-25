@@ -374,6 +374,139 @@
   .meter-panel.pulsing {
     animation: meterPulse 0.4s ease 3;
   }
+
+  /* ─── VISION PANEL ──────────────────────────────────────────────────────── */
+  .vision-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .vision-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .vision-status-text {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #446644;
+    margin-top: 4px;
+    transition: color 0.3s;
+  }
+  .vision-status-text.scanning  { color: var(--green); }
+  .vision-status-text.near-goal { color: var(--amber); animation: visionPulse 0.6s infinite alternate; }
+  .vision-status-text.analysing { color: var(--blue); }
+  .vision-status-text.error     { color: var(--red); }
+
+  @keyframes visionPulse { from { opacity: 0.6; } to { opacity: 1; } }
+
+  .vision-toggle-btn {
+    background: transparent;
+    border: 1px solid var(--green);
+    color: var(--green);
+    padding: 8px 18px;
+    border-radius: 3px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 15px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .vision-toggle-btn:hover  { background: var(--green); color: #000; }
+  .vision-toggle-btn.active { background: var(--red); border-color: var(--red); color: #fff; }
+
+  .camera-wrap {
+    position: relative;
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: #000;
+    aspect-ratio: 4/3;
+  }
+  .camera-wrap video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .vision-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding: 8px;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .vision-badge {
+    font-size: 10px;
+    letter-spacing: 1px;
+    padding: 3px 8px;
+    border-radius: 2px;
+    background: rgba(0,0,0,0.75);
+    color: #446644;
+    border: 1px solid #1a2e1a;
+    transition: all 0.3s;
+    text-transform: uppercase;
+  }
+  .vision-badge.ball-visible  { color: var(--green); border-color: var(--green); }
+  .vision-badge.near-goal-ind { color: var(--amber); border-color: var(--amber); }
+  .vision-badge.in-goal-ind   { color: var(--red);   border-color: var(--red);   }
+
+  .vision-log {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 10px;
+    max-height: 96px;
+    overflow-y: auto;
+    font-size: 10px;
+    font-family: monospace;
+    color: #446644;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .vision-log-entry { line-height: 1.4; }
+
+  .api-key-wrap {
+    display: flex;
+    gap: 8px;
+  }
+  .api-key-wrap input {
+    flex: 1;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: #fff;
+    font-size: 12px;
+    padding: 8px 10px;
+    font-family: monospace;
+  }
+  .api-key-wrap input:focus { outline: none; border-color: var(--green); }
+  .api-key-wrap button {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: #446644;
+    padding: 8px 14px;
+    border-radius: 3px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .api-key-wrap button:hover { border-color: var(--green); color: var(--green); }
 </style>
 </head>
 <body>
@@ -435,6 +568,34 @@
     <div class="volume-wrap">
       <label>Volume</label>
       <input type="range" min="0" max="100" value="75" id="volSlider" oninput="setVolume(this.value)">
+    </div>
+  </div>
+
+  <!-- AI Vision -->
+  <div class="vision-panel">
+    <div class="vision-header">
+      <div>
+        <div class="reactions-label">AI Ball Detection</div>
+        <div class="vision-status-text" id="visionStatusText">Enter API key below to start</div>
+      </div>
+      <button class="vision-toggle-btn" id="visionToggle" onclick="toggleVision()">📷 START</button>
+    </div>
+
+    <div class="camera-wrap" id="cameraWrap" style="display:none">
+      <video id="cameraVideo" autoplay muted playsinline></video>
+      <canvas id="captureCanvas" style="display:none"></canvas>
+      <div class="vision-overlay">
+        <div class="vision-badge" id="ballBadge">● NO BALL</div>
+      </div>
+    </div>
+
+    <div class="vision-log" id="visionLog">
+      <div class="vision-log-entry">AI vision ready. Will auto-trigger crowd reactions.</div>
+    </div>
+
+    <div class="api-key-wrap">
+      <input type="password" id="apiKeyInput" placeholder="Anthropic API key (sk-ant-…)" autocomplete="off" />
+      <button onclick="saveApiKey()">Save Key</button>
     </div>
   </div>
 
@@ -596,7 +757,7 @@ const reactions = { goal: playGoal, nearmiss: playNearMiss, save: playGreatSave,
 function triggerReaction(type, btn) {
   if (!ctx) return;
   reactions[type]?.();
-  addRipple(btn);
+  if (btn) addRipple(btn);
 }
 
 // ─── EXCITEMENT STATE ────────────────────────────────────────────────────────
@@ -732,6 +893,270 @@ async function toggleCrowd() {
     btn.classList.remove('active');
   }
 }
+
+// ─── AI VISION ──────────────────────────────────────────────────────────────
+
+const VISION_PROMPT = `You are watching a Subbuteo tabletop football game. Subbuteo is played on a flat green felt surface with small plastic player figures (about 2–3 cm tall) and a small round ball (about 1 cm).
+
+Analyse this image and respond ONLY with a valid JSON object — no other text, no markdown, no explanation.
+
+Required JSON:
+{
+  "ballPosition": <one of: "in-left-goal", "near-left-goal", "midfield", "near-right-goal", "in-right-goal", "not-visible">,
+  "keeperBlocking": <true if a goalkeeper figure is clearly between the ball and the nearest goal, otherwise false>,
+  "confidence": <"high", "medium", or "low">
+}
+
+Definitions:
+- "in-left-goal": ball is visibly inside the left-hand goal structure or net
+- "near-left-goal": ball is close to the left goal (within roughly the penalty area)
+- "midfield": ball is in the central portion of the pitch
+- "near-right-goal": ball is close to the right goal (within roughly the penalty area)
+- "in-right-goal": ball is visibly inside the right-hand goal structure or net
+- "not-visible": you cannot locate the ball with confidence
+
+Use "low" confidence if lighting is poor, the view is partially obscured, or you are guessing.`;
+
+const NORMAL_INTERVAL  = 5000;
+const NEAR_GOAL_INTERVAL = 1000;
+const EVENT_COOLDOWN   = 12000;
+
+let visionActive       = false;
+let visionScanTimer    = null;
+let visionStream       = null;
+let visionScanDelay    = NORMAL_INTERVAL;
+let lastBallPosition   = 'midfield';
+let lastKeeperBlocking = false;
+let lastEventTime      = 0;
+
+function getApiKey() {
+  return localStorage.getItem('subbuteoAnthropicKey') || '';
+}
+
+function saveApiKey() {
+  const key = document.getElementById('apiKeyInput').value.trim();
+  if (!key) { logVision('⚠ No key entered.'); return; }
+  localStorage.setItem('subbuteoAnthropicKey', key);
+  document.getElementById('apiKeyInput').value = '';
+  document.getElementById('apiKeyInput').placeholder = 'API key saved ✓';
+  logVision('API key saved.');
+}
+
+async function toggleVision() {
+  if (!visionActive) {
+    await startVision();
+  } else {
+    stopVision();
+  }
+}
+
+async function startVision() {
+  if (!getApiKey()) {
+    logVision('⚠ Save an Anthropic API key first.');
+    return;
+  }
+  try {
+    visionStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 480 } }
+    });
+    const video = document.getElementById('cameraVideo');
+    video.srcObject = visionStream;
+    await new Promise(res => { video.onloadedmetadata = res; });
+
+    document.getElementById('cameraWrap').style.display = 'block';
+    document.getElementById('visionToggle').textContent = '⏹ STOP';
+    document.getElementById('visionToggle').classList.add('active');
+    visionActive = true;
+    visionScanDelay = NORMAL_INTERVAL;
+    setVisionStatus('Scanning every 5s…', 'scanning');
+    logVision('Camera ready. First scan in 5 s.');
+    scheduleNextScan(NORMAL_INTERVAL);
+  } catch (err) {
+    logVision('⚠ Camera error: ' + err.message);
+  }
+}
+
+function stopVision() {
+  clearTimeout(visionScanTimer);
+  if (visionStream) {
+    visionStream.getTracks().forEach(t => t.stop());
+    visionStream = null;
+  }
+  visionActive = false;
+  document.getElementById('cameraWrap').style.display = 'none';
+  const btn = document.getElementById('visionToggle');
+  btn.textContent = '📷 START';
+  btn.classList.remove('active');
+  setVisionStatus('Stopped', '');
+  setBallBadge('not-visible');
+  logVision('Vision stopped.');
+}
+
+function scheduleNextScan(delay) {
+  clearTimeout(visionScanTimer);
+  if (!visionActive) return;
+  visionScanTimer = setTimeout(doScan, delay);
+}
+
+async function doScan() {
+  if (!visionActive) return;
+
+  const frame = captureFrame();
+  if (!frame) { scheduleNextScan(visionScanDelay); return; }
+
+  setVisionStatus('🤖 Analysing…', 'analysing');
+  try {
+    const result = await callVisionAPI(frame);
+    handleVisionResult(result);
+  } catch (err) {
+    logVision('⚠ ' + err.message);
+    setVisionStatus('⚠ API error', 'error');
+  }
+  scheduleNextScan(visionScanDelay);
+}
+
+function captureFrame() {
+  const video = document.getElementById('cameraVideo');
+  if (!video.videoWidth) return null;
+  const canvas = document.getElementById('captureCanvas');
+  canvas.width  = 512;
+  canvas.height = Math.round(512 * video.videoHeight / video.videoWidth);
+  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+  return dataUrl.split(',')[1];
+}
+
+async function callVisionAPI(base64Jpg) {
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': getApiKey(),
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 120,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64Jpg } },
+          { type: 'text',  text: VISION_PROMPT }
+        ]
+      }]
+    })
+  });
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({}));
+    throw new Error(body.error?.message || `HTTP ${resp.status}`);
+  }
+  const data = await resp.json();
+  const raw  = data.content[0].text.trim();
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('Unexpected response: ' + raw.slice(0, 60));
+  return JSON.parse(match[0]);
+}
+
+function handleVisionResult(result) {
+  const pos    = result.ballPosition   || 'not-visible';
+  const keeper = !!result.keeperBlocking;
+  const conf   = result.confidence     || 'low';
+
+  const inGoal   = pos === 'in-left-goal'   || pos === 'in-right-goal';
+  const nearGoal = pos === 'near-left-goal' || pos === 'near-right-goal';
+
+  // Adjust polling rate
+  if (inGoal || nearGoal) {
+    if (visionScanDelay !== NEAR_GOAL_INTERVAL) {
+      visionScanDelay = NEAR_GOAL_INTERVAL;
+      logVision('⚡ Ball near goal — scanning every 1 s');
+    }
+    setVisionStatus('⚡ Near goal!', 'near-goal');
+  } else {
+    if (visionScanDelay !== NORMAL_INTERVAL) {
+      visionScanDelay = NORMAL_INTERVAL;
+      logVision('Back to 5 s scan interval');
+    }
+    setVisionStatus('🔍 Scanning every 5s…', 'scanning');
+  }
+
+  // Update badge
+  setBallBadge(pos);
+
+  // Log concisely
+  logVision(`Ball: ${pos} | Keeper: ${keeper ? 'blocking' : 'clear'} | Conf: ${conf}`);
+
+  // Event detection — only fire with non-low confidence and after cooldown
+  const now = Date.now();
+  const cooldownOk = (now - lastEventTime) > EVENT_COOLDOWN;
+  if (cooldownOk && conf !== 'low') {
+    const prevNear = lastBallPosition === 'near-left-goal' || lastBallPosition === 'near-right-goal';
+    const prevIn   = lastBallPosition === 'in-left-goal'   || lastBallPosition === 'in-right-goal';
+
+    if (inGoal && !prevIn) {
+      // Ball newly inside a goal → GOAL
+      fireEvent('goal', '🥅 GOAL detected by AI!');
+    } else if (prevNear && !nearGoal && !inGoal) {
+      // Ball moved away from danger zone without scoring
+      if (keeper || lastKeeperBlocking) {
+        fireEvent('save', '🧤 GREAT SAVE detected by AI!');
+      } else {
+        fireEvent('nearmiss', '😬 NEAR MISS detected by AI!');
+      }
+    }
+  }
+
+  lastBallPosition   = pos;
+  lastKeeperBlocking = keeper;
+}
+
+function fireEvent(type, msg) {
+  lastEventTime = Date.now();
+  logVision(msg);
+  // Auto-start audio context if crowd isn't running yet
+  if (!ctx) {
+    initAudio().then(() => triggerReaction(type, null));
+  } else {
+    triggerReaction(type, null);
+  }
+}
+
+function setVisionStatus(text, cls) {
+  const el = document.getElementById('visionStatusText');
+  el.textContent = text;
+  el.className   = 'vision-status-text' + (cls ? ' ' + cls : '');
+}
+
+function setBallBadge(pos) {
+  const badge = document.getElementById('ballBadge');
+  const inGoal   = pos === 'in-left-goal' || pos === 'in-right-goal';
+  const nearGoal = pos === 'near-left-goal' || pos === 'near-right-goal';
+  badge.textContent = '● ' + pos.replace(/-/g, ' ').toUpperCase();
+  badge.className = 'vision-badge' +
+    (inGoal   ? ' in-goal-ind'   :
+     nearGoal  ? ' near-goal-ind' :
+     pos !== 'not-visible' ? ' ball-visible' : '');
+}
+
+function logVision(msg) {
+  const log = document.getElementById('visionLog');
+  const entry = document.createElement('div');
+  entry.className = 'vision-log-entry';
+  const t = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  entry.textContent = `[${t}] ${msg}`;
+  log.appendChild(entry);
+  while (log.children.length > 6) log.removeChild(log.firstChild);
+  log.scrollTop = log.scrollHeight;
+}
+
+// Pre-fill API key placeholder if already saved
+window.addEventListener('DOMContentLoaded', () => {
+  if (getApiKey()) {
+    document.getElementById('apiKeyInput').placeholder = 'API key saved ✓ (paste new to replace)';
+    logVision('API key loaded. Press 📷 START to begin.');
+  }
+});
 
 // Build meter on load
 buildMeter();
