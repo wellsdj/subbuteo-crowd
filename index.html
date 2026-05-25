@@ -375,6 +375,85 @@
     animation: meterPulse 0.4s ease 3;
   }
 
+  /* ─── SPLASH / PASSWORD GATE ───────────────────────────────────────────── */
+  .splash {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 32px;
+    padding: 24px;
+  }
+  .splash-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(36px, 10vw, 72px);
+    letter-spacing: 6px;
+    color: var(--green);
+    text-shadow: 0 0 30px var(--green), 0 0 60px var(--green-dim);
+    text-align: center;
+  }
+  .splash-sub {
+    font-size: 11px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: #446644;
+    margin-top: -24px;
+  }
+  .splash-form {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    max-width: 320px;
+  }
+  .splash-input {
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: #fff;
+    font-size: 18px;
+    padding: 14px 16px;
+    text-align: center;
+    letter-spacing: 4px;
+    font-family: monospace;
+    transition: border-color 0.2s;
+  }
+  .splash-input:focus { outline: none; border-color: var(--green); }
+  .splash-input.error { border-color: var(--red); animation: shake 0.3s ease; }
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    25%      { transform: translateX(-8px); }
+    75%      { transform: translateX(8px); }
+  }
+  .splash-btn {
+    width: 100%;
+    background: transparent;
+    border: 1px solid var(--green);
+    color: var(--green);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 3px;
+    padding: 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .splash-btn:hover { background: var(--green); color: #000; }
+  .splash-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .splash-error {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--red);
+    min-height: 16px;
+  }
+
   /* ─── VISION PANEL ──────────────────────────────────────────────────────── */
   .vision-panel {
     background: var(--panel);
@@ -510,6 +589,19 @@
 </style>
 </head>
 <body>
+
+<div class="splash" id="splash">
+  <div>
+    <div class="splash-title">CROWD</div>
+    <div class="splash-sub">Subbuteo Atmosphere Engine</div>
+  </div>
+  <form class="splash-form" onsubmit="checkPassword(event)">
+    <input class="splash-input" id="splashInput" type="password"
+           placeholder="Password" autocomplete="current-password" autofocus />
+    <div class="splash-error" id="splashError"></div>
+    <button class="splash-btn" id="splashBtn" type="submit">ENTER</button>
+  </form>
+</div>
 
 <div class="flash-overlay" id="flashOverlay"></div>
 
@@ -892,6 +984,45 @@ async function toggleCrowd() {
     btn.textContent = '▶ START CROWD';
     btn.classList.remove('active');
   }
+}
+
+// ─── PASSWORD GATE ──────────────────────────────────────────────────────────
+
+(function () {
+  if (sessionStorage.getItem('crowdAuth') === '1') {
+    document.getElementById('splash').style.display = 'none';
+  }
+})();
+
+async function checkPassword(e) {
+  e.preventDefault();
+  const input = document.getElementById('splashInput');
+  const btn   = document.getElementById('splashBtn');
+  const err   = document.getElementById('splashError');
+
+  btn.disabled = true;
+  err.textContent = '';
+
+  try {
+    const resp = await fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ password: input.value })
+    });
+    if (resp.ok) {
+      sessionStorage.setItem('crowdAuth', '1');
+      document.getElementById('splash').style.display = 'none';
+    } else {
+      err.textContent = 'Wrong password';
+      input.value = '';
+      input.classList.add('error');
+      setTimeout(() => input.classList.remove('error'), 400);
+      input.focus();
+    }
+  } catch {
+    err.textContent = 'Connection error — try again';
+  }
+  btn.disabled = false;
 }
 
 // ─── AI VISION ──────────────────────────────────────────────────────────────
