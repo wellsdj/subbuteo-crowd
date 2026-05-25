@@ -559,33 +559,6 @@
   }
   .vision-log-entry { line-height: 1.4; }
 
-  .api-key-wrap {
-    display: flex;
-    gap: 8px;
-  }
-  .api-key-wrap input {
-    flex: 1;
-    background: rgba(0,0,0,0.4);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    color: #fff;
-    font-size: 12px;
-    padding: 8px 10px;
-    font-family: monospace;
-  }
-  .api-key-wrap input:focus { outline: none; border-color: var(--green); }
-  .api-key-wrap button {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: #446644;
-    padding: 8px 14px;
-    border-radius: 3px;
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.15s;
-    white-space: nowrap;
-  }
-  .api-key-wrap button:hover { border-color: var(--green); color: var(--green); }
 </style>
 </head>
 <body>
@@ -685,10 +658,6 @@
       <div class="vision-log-entry">AI vision ready. Will auto-trigger crowd reactions.</div>
     </div>
 
-    <div class="api-key-wrap">
-      <input type="password" id="apiKeyInput" placeholder="Anthropic API key (sk-ant-…)" autocomplete="off" />
-      <button onclick="saveApiKey()">Save Key</button>
-    </div>
   </div>
 
 </div>
@@ -1027,26 +996,7 @@ async function checkPassword(e) {
 
 // ─── AI VISION ──────────────────────────────────────────────────────────────
 
-const VISION_PROMPT = `You are watching a Subbuteo tabletop football game. Subbuteo is played on a flat green felt surface with small plastic player figures (about 2–3 cm tall) and a small round ball (about 1 cm).
-
-Analyse this image and respond ONLY with a valid JSON object — no other text, no markdown, no explanation.
-
-Required JSON:
-{
-  "ballPosition": <one of: "in-left-goal", "near-left-goal", "midfield", "near-right-goal", "in-right-goal", "not-visible">,
-  "keeperBlocking": <true if a goalkeeper figure is clearly between the ball and the nearest goal, otherwise false>,
-  "confidence": <"high", "medium", or "low">
-}
-
-Definitions:
-- "in-left-goal": ball is visibly inside the left-hand goal structure or net
-- "near-left-goal": ball is close to the left goal (within roughly the penalty area)
-- "midfield": ball is in the central portion of the pitch
-- "near-right-goal": ball is close to the right goal (within roughly the penalty area)
-- "in-right-goal": ball is visibly inside the right-hand goal structure or net
-- "not-visible": you cannot locate the ball with confidence
-
-Use "low" confidence if lighting is poor, the view is partially obscured, or you are guessing.`;
+// Vision prompt lives server-side in api/vision.js
 
 const NORMAL_INTERVAL  = 5000;
 const NEAR_GOAL_INTERVAL = 1000;
@@ -1060,19 +1010,6 @@ let lastBallPosition   = 'midfield';
 let lastKeeperBlocking = false;
 let lastEventTime      = 0;
 
-function getApiKey() {
-  return localStorage.getItem('subbuteoAnthropicKey') || '';
-}
-
-function saveApiKey() {
-  const key = document.getElementById('apiKeyInput').value.trim();
-  if (!key) { logVision('⚠ No key entered.'); return; }
-  localStorage.setItem('subbuteoAnthropicKey', key);
-  document.getElementById('apiKeyInput').value = '';
-  document.getElementById('apiKeyInput').placeholder = 'API key saved ✓';
-  logVision('API key saved.');
-}
-
 async function toggleVision() {
   if (!visionActive) {
     await startVision();
@@ -1082,10 +1019,6 @@ async function toggleVision() {
 }
 
 async function startVision() {
-  if (!getApiKey()) {
-    logVision('⚠ Save an Anthropic API key first.');
-    return;
-  }
   try {
     visionStream = await navigator.mediaDevices.getUserMedia({
       video: { width: { ideal: 640 }, height: { ideal: 480 } }
@@ -1158,29 +1091,14 @@ function captureFrame() {
 }
 
 async function callVisionAPI(base64Jpg) {
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+  const resp = await fetch('/api/vision', {
     method: 'POST',
-    headers: {
-      'x-api-key': getApiKey(),
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 120,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64Jpg } },
-          { type: 'text',  text: VISION_PROMPT }
-        ]
-      }]
-    })
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ image: base64Jpg })
   });
   if (!resp.ok) {
     const body = await resp.json().catch(() => ({}));
-    throw new Error(body.error?.message || `HTTP ${resp.status}`);
+    throw new Error(body.error || `HTTP ${resp.status}`);
   }
   const data = await resp.json();
   const raw  = data.content[0].text.trim();
@@ -1281,13 +1199,6 @@ function logVision(msg) {
   log.scrollTop = log.scrollHeight;
 }
 
-// Pre-fill API key placeholder if already saved
-window.addEventListener('DOMContentLoaded', () => {
-  if (getApiKey()) {
-    document.getElementById('apiKeyInput').placeholder = 'API key saved ✓ (paste new to replace)';
-    logVision('API key loaded. Press 📷 START to begin.');
-  }
-});
 
 // Build meter on load
 buildMeter();
