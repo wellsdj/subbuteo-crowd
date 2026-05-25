@@ -587,23 +587,24 @@ async function runScan() {
   const crops = captureGoalCrops();
   if (!crops) { setScanPip('idle'); scheduleNextScan(); return; }
 
-  let leftResult, rightResult;
+  let L, R;
   try {
-    [leftResult, rightResult] = await Promise.all([
-      callVision(crops.left),
-      callVision(crops.right)
-    ]);
+    [L, R] = await Promise.all([callVision(crops.left), callVision(crops.right)]);
   } catch(err) {
-    showScanResult('error', 'API error: ' + err.message, 2000);
     setScanPip('idle');
+    showScanResult('error', 'API error: ' + err.message, 3000);
     scheduleNextScan();
     return;
   }
 
   setScanPip('idle');
 
-  const goalResult = [leftResult, rightResult].find(r =>
-    r.inGoal && (r.confidence === 'high' || r.confidence === 'medium')
+  // Always log the raw AI output to console for debugging
+  console.log('LEFT:', JSON.stringify(L));
+  console.log('RIGHT:', JSON.stringify(R));
+
+  const goalResult = [L, R].find(r =>
+    r.inGoal === true && (r.confidence === 'high' || r.confidence === 'medium')
   );
 
   if (goalResult) {
@@ -622,12 +623,23 @@ async function runScan() {
     return;
   }
 
-  // No goal — show the most informative observation
-  const obs = (leftResult.ballSeen ? leftResult.observation : null)
-           || (rightResult.ballSeen ? rightResult.observation : null)
-           || leftResult.observation
-           || 'No goal detected';
-  showScanResult('ok', obs, 1400);
+  // Build a diagnostic line showing actual AI values
+  const lTag = `L:${L.ballSeen ? 'ball' : 'no-ball'}/goal=${L.inGoal}/${L.confidence}`;
+  const rTag = `R:${R.ballSeen ? 'ball' : 'no-ball'}/goal=${R.inGoal}/${R.confidence}`;
+  const diagnostic = `${lTag}  ${rTag}`;
+
+  const eitherSeenBall = L.ballSeen || R.ballSeen;
+  const eitherSeenGoal = L.inGoal || R.inGoal;
+
+  if (eitherSeenGoal) {
+    // inGoal but only low confidence — show warn
+    showScanResult('warn', 'Possible goal (low conf) — ' + diagnostic, 2000);
+  } else if (eitherSeenBall) {
+    showScanResult('ok', diagnostic, 1800);
+  } else {
+    showScanResult('warn', 'No ball seen — ' + diagnostic, 1800);
+  }
+
   scheduleNextScan();
 }
 
@@ -670,11 +682,17 @@ async function callVision(base64Jpg) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ image: base64Jpg })
   });
-  if (!resp.ok) throw new Error('HTTP ' + resp.status);
   const data = await resp.json();
-  const raw  = data.content[0].text.trim();
+  if (!resp.ok) {
+    const msg = data.error?.message || data.error || ('HTTP ' + resp.status);
+    throw new Error(msg);
+  }
+  if (!data.content || !data.content[0]) {
+    throw new Error('Unexpected API response: ' + JSON.stringify(data).slice(0, 120));
+  }
+  const raw = data.content[0].text.trim();
   const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('Bad response');
+  if (!match) throw new Error('No JSON in response: ' + raw.slice(0, 80));
   return JSON.parse(match[0]);
 }
 
