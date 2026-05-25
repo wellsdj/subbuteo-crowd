@@ -998,17 +998,27 @@ async function checkPassword(e) {
 
 // Vision prompt lives server-side in api/vision.js
 
+// In normal mode we poll every 5 s (sequential).
+// When the ball enters shooting range we switch to a PIPELINED mode:
+// frames are captured every 500 ms and API calls are fired without
+// waiting for the previous response. Results are processed as they
+// arrive; stale responses (superseded by a newer one) are discarded.
+// Audio buffers are preloaded the moment the camera starts so the
+// crowd reaction fires with zero audio-init delay.
+
 const NORMAL_INTERVAL  = 5000;
-const NEAR_GOAL_INTERVAL = 2000;
+const FAST_CAPTURE_MS  = 500;   // frame capture rate when near goal
 const EVENT_COOLDOWN   = 12000;
 
 let visionActive       = false;
-let visionScanTimer    = null;
+let visionNearGoalMode = false;
+let visionTimer        = null;  // setTimeout (normal) or setInterval (fast)
 let visionStream       = null;
-let visionScanDelay    = NORMAL_INTERVAL;
 let lastBallPosition   = 'midfield';
 let lastKeeperBlocking = false;
 let lastEventTime      = 0;
+let scanSeq            = 0;     // monotonically increasing frame counter
+let lastHandledSeq     = 0;     // last seq we processed a result for
 
 async function toggleVision() {
   if (!visionActive) {
@@ -1031,22 +1041,27 @@ async function startVision() {
     document.getElementById('visionToggle').textContent = '⏹ STOP';
     document.getElementById('visionToggle').classList.add('active');
     visionActive = true;
-    visionScanDelay = NORMAL_INTERVAL;
-    setVisionStatus('Scanning every 5s…', 'scanning');
-    logVision('Camera ready. First scan in 5 s.');
-    scheduleNextScan(NORMAL_INTERVAL);
+
+    // Preload audio so reactions fire instantly when triggered
+    if (!ctx) await initAudio();
+    await Promise.all([loadGoalBuffer(), loadNearMissBuffer()]);
+
+    enterNormalMode();
+    logVision('Camera ready. Audio preloaded. First scan in 5 s.');
   } catch (err) {
     logVision('⚠ Camera error: ' + err.message);
   }
 }
 
 function stopVision() {
-  clearTimeout(visionScanTimer);
+  clearTimeout(visionTimer);
+  clearInterval(visionTimer);
   if (visionStream) {
     visionStream.getTracks().forEach(t => t.stop());
     visionStream = null;
   }
-  visionActive = false;
+  visionActive       = false;
+  visionNearGoalMode = false;
   document.getElementById('cameraWrap').style.display = 'none';
   const btn = document.getElementById('visionToggle');
   btn.textContent = '📷 START';
@@ -1056,27 +1071,63 @@ function stopVision() {
   logVision('Vision stopped.');
 }
 
-function scheduleNextScan(delay) {
-  clearTimeout(visionScanTimer);
+// ── Normal mode: sequential scan every 5 s ───────────────────────────────────
+
+function enterNormalMode() {
   if (!visionActive) return;
-  visionScanTimer = setTimeout(doScan, delay);
+  clearInterval(visionTimer);
+  visionNearGoalMode = false;
+  setVisionStatus('🔍 Scanning every 5s…', 'scanning');
+  visionTimer = setTimeout(runNormalScan, NORMAL_INTERVAL);
 }
 
-async function doScan() {
-  if (!visionActive) return;
-
+async function runNormalScan() {
+  if (!visionActive || visionNearGoalMode) return;
   const frame = captureFrame();
-  if (!frame) { scheduleNextScan(visionScanDelay); return; }
-
-  setVisionStatus('🤖 Analysing…', 'analysing');
-  try {
-    const result = await callVisionAPI(frame);
-    handleVisionResult(result);
-  } catch (err) {
-    logVision('⚠ ' + err.message);
-    setVisionStatus('⚠ API error', 'error');
+  if (frame) {
+    setVisionStatus('🤖 Analysing…', 'analysing');
+    try {
+      const result = await callVisionAPI(frame);
+      handleVisionResult(result);
+    } catch (err) {
+      logVision('⚠ ' + err.message);
+      setVisionStatus('⚠ API error', 'error');
+    }
   }
-  scheduleNextScan(visionScanDelay);
+  if (visionActive && !visionNearGoalMode) {
+    visionTimer = setTimeout(runNormalScan, NORMAL_INTERVAL);
+  }
+}
+
+// ── Fast mode: pipelined scans every 500 ms when near goal ───────────────────
+// Frames are captured on a fixed interval and sent without waiting for the
+// previous response. Each call tags its frame with a sequence number; when
+// a response arrives, it's only processed if no newer response has already
+// been handled (stale results are discarded).
+
+function enterFastMode() {
+  if (!visionActive || visionNearGoalMode) return;
+  clearTimeout(visionTimer);
+  visionNearGoalMode = true;
+  setVisionStatus('⚡ Near goal — scanning fast', 'near-goal');
+  logVision('⚡ Ball in shooting range — fast scan mode');
+  // Fire immediately, then on interval
+  fireFastScan();
+  visionTimer = setInterval(fireFastScan, FAST_CAPTURE_MS);
+}
+
+function fireFastScan() {
+  if (!visionActive) return;
+  const frame = captureFrame();
+  if (!frame) return;
+  const seq = ++scanSeq;
+  callVisionAPI(frame)
+    .then(result => {
+      if (seq <= lastHandledSeq) return; // stale — a newer result already processed
+      lastHandledSeq = seq;
+      handleVisionResult(result);
+    })
+    .catch(err => logVision('⚠ ' + err.message));
 }
 
 function captureFrame() {
@@ -1114,26 +1165,21 @@ function handleVisionResult(result) {
 
   const inGoal   = pos === 'in-left-goal'   || pos === 'in-right-goal';
   const nearGoal = pos === 'near-left-goal' || pos === 'near-right-goal';
+  const danger   = inGoal || nearGoal;
 
-  // Adjust polling rate
-  if (inGoal || nearGoal) {
-    if (visionScanDelay !== NEAR_GOAL_INTERVAL) {
-      visionScanDelay = NEAR_GOAL_INTERVAL;
-      logVision('⚡ Ball in shooting range — scanning every 2 s');
-    }
-    setVisionStatus('⚡ Near goal!', 'near-goal');
-  } else {
-    if (visionScanDelay !== NORMAL_INTERVAL) {
-      visionScanDelay = NORMAL_INTERVAL;
-      logVision('Back to 5 s scan interval');
-    }
-    setVisionStatus('🔍 Scanning every 5s…', 'scanning');
+  // Switch scan mode based on ball position
+  if (danger && !visionNearGoalMode) {
+    enterFastMode();
+  } else if (!danger && visionNearGoalMode) {
+    logVision('Ball clear — back to 5 s scan');
+    clearInterval(visionTimer);
+    visionNearGoalMode = false;
+    enterNormalMode();
+  } else if (danger) {
+    setVisionStatus('⚡ Near goal — scanning fast', 'near-goal');
   }
 
-  // Update badge
   setBallBadge(pos);
-
-  // Log concisely
   logVision(`Ball: ${pos} | Keeper: ${keeper ? 'blocking' : 'clear'} | Conf: ${conf}`);
 
   // Event detection — only fire with non-low confidence and after cooldown
@@ -1144,10 +1190,8 @@ function handleVisionResult(result) {
     const prevIn   = lastBallPosition === 'in-left-goal'   || lastBallPosition === 'in-right-goal';
 
     if (inGoal && !prevIn) {
-      // Ball newly inside a goal → GOAL
       fireEvent('goal', '🥅 GOAL detected by AI!');
     } else if (prevNear && !nearGoal && !inGoal) {
-      // Ball moved away from danger zone without scoring
       if (keeper || lastKeeperBlocking) {
         fireEvent('save', '🧤 GREAT SAVE detected by AI!');
       } else {
@@ -1163,12 +1207,7 @@ function handleVisionResult(result) {
 function fireEvent(type, msg) {
   lastEventTime = Date.now();
   logVision(msg);
-  // Auto-start audio context if crowd isn't running yet
-  if (!ctx) {
-    initAudio().then(() => triggerReaction(type, null));
-  } else {
-    triggerReaction(type, null);
-  }
+  triggerReaction(type, null); // audio already preloaded by startVision
 }
 
 function setVisionStatus(text, cls) {
