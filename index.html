@@ -603,9 +603,7 @@ async function runScan() {
   console.log('LEFT:', JSON.stringify(L));
   console.log('RIGHT:', JSON.stringify(R));
 
-  const goalResult = [L, R].find(r =>
-    r.inGoal === true && (r.confidence === 'high' || r.confidence === 'medium')
-  );
+  const goalResult = [L, R].find(r => r.inGoal === true);
 
   if (goalResult) {
     const now = Date.now();
@@ -662,7 +660,7 @@ function captureGoalCrops() {
 
   const vw = video.videoWidth;
   const vh = video.videoHeight;
-  const cropW = Math.round(vw * 0.35);
+  const cropW = Math.round(vw * 0.40);
   const outW = 480;
   const outH = Math.round(outW * vh / cropW);
 

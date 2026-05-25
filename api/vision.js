@@ -1,18 +1,26 @@
-const GOAL_CROP_PROMPT = `You are looking at a cropped image showing ONE GOAL END of a Subbuteo tabletop football pitch.
+const GOAL_CROP_PROMPT = `You are looking at a cropped image of ONE GOAL END of a Subbuteo tabletop football pitch. The camera is positioned at the SIDE of the pitch, so you are seeing the goal from the side or a slight angle — you may not see directly into the net.
 
-THE BALL is a soccer ball — very round, slightly smaller than the player figures on the pitch. It sits on the green felt surface. There is only ONE ball on the entire pitch.
+THE GOAL is a small rectangular frame (posts + crossbar) with a white net attached behind it, sitting on the green felt surface.
 
-PLAYER FIGURES stand on large flat circular bases. The ball is rounder and slightly smaller than these bases. Do not confuse a player base with the ball.
+THE BALL is a small, very round soccer ball — slightly smaller than the player figure bases. It sits on the green felt. There is only ONE ball on the whole pitch.
 
-HUMAN HANDS may be visible in the frame — ignore them completely.
+PLAYER FIGURES have large flat circular bases. Do not mistake a player base for the ball.
 
-YOUR QUESTION: Is the soccer ball currently inside the goal net shown in this image?
+HANDS or arms may be visible — ignore them.
 
-Rules:
-- The ball must be PAST the goal line, inside the net structure — not in front of the posts
-- A ball sitting in front of or beside the goal does NOT count as a goal
-- If you are not confident, say inGoal: false — do not guess
-- ballSeen means you can see the ball anywhere in this cropped image
+YOUR QUESTION: Is the soccer ball at or inside the goal — meaning at the goal line or behind the posts?
+
+Rules for inGoal = true:
+- Ball is touching or overlapping the goal posts/frame
+- Ball is behind the goal line (even partially hidden by the net)
+- Ball is inside the net area, even if you can only see part of it
+- The camera angle may make it hard to see "inside" the net — if the ball is clearly at the goal structure, say inGoal: true
+
+Rules for inGoal = false:
+- Ball is clearly in open play on the pitch, away from the goal
+- No ball is visible near the goal at all
+
+ballSeen = true if you can see the ball anywhere in this cropped image.
 
 Respond ONLY with valid JSON, no other text:
 {"inGoal": true or false, "ballSeen": true or false, "confidence": "high" or "medium" or "low", "observation": "one sentence describing exactly what you see"}`;
