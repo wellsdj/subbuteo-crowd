@@ -740,7 +740,7 @@ function runGestureLoop() {
             lastGestureTime = now;
             if (!ctx) initAudio();
             triggerReaction(reaction, null);
-            if (reaction === 'goal') showGoalPopup();
+            if (reaction === 'goal') { showGoalPopup(); stopGesture(); }
           }
         }
       }
