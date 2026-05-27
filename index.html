@@ -244,7 +244,7 @@
       <button class="start-btn" onclick="startDetection()">
         <span>&#9679;</span> Start Detection
       </button>
-      <div class="camera-hint">Place laptop at the long side of the pitch — goals left &amp; right</div>
+      <div class="camera-hint">Point camera directly at one goal, close up</div>
     </div>
 
     <!-- Active: stop button top-left -->
@@ -584,12 +584,12 @@ async function runScan() {
   if (!detectionActive) return;
   setScanPip('scanning');
 
-  const crops = captureGoalCrops();
-  if (!crops) { setScanPip('idle'); scheduleNextScan(); return; }
+  const frame = captureFrame();
+  if (!frame) { setScanPip('idle'); scheduleNextScan(); return; }
 
-  let L, R;
+  let result;
   try {
-    [L, R] = await Promise.all([callVision(crops.left), callVision(crops.right)]);
+    result = await callVision(frame);
   } catch(err) {
     setScanPip('idle');
     showScanResult('error', 'API error: ' + err.message, 3000);
@@ -598,18 +598,13 @@ async function runScan() {
   }
 
   setScanPip('idle');
+  console.log('SCAN:', JSON.stringify(result));
 
-  // Always log the raw AI output to console for debugging
-  console.log('LEFT:', JSON.stringify(L));
-  console.log('RIGHT:', JSON.stringify(R));
-
-  const goalResult = [L, R].find(r => r.inGoal === true);
-
-  if (goalResult) {
+  if (result.inGoal === true) {
     const now = Date.now();
     if (now - lastGoalTime > GOAL_COOLDOWN) {
       lastGoalTime = now;
-      showScanResult('ok', 'GOAL — ' + goalResult.observation, 1000);
+      showScanResult('ok', 'GOAL — ' + (result.observation || ''), 1000);
       setTimeout(() => {
         triggerReaction('goal', null);
         showGoalPopup();
@@ -621,23 +616,7 @@ async function runScan() {
     return;
   }
 
-  // Build a diagnostic line showing actual AI values
-  const lTag = `L:${L.ballSeen ? 'ball' : 'no-ball'}/goal=${L.inGoal}/${L.confidence}`;
-  const rTag = `R:${R.ballSeen ? 'ball' : 'no-ball'}/goal=${R.inGoal}/${R.confidence}`;
-  const diagnostic = `${lTag}  ${rTag}`;
-
-  const eitherSeenBall = L.ballSeen || R.ballSeen;
-  const eitherSeenGoal = L.inGoal || R.inGoal;
-
-  if (eitherSeenGoal) {
-    // inGoal but only low confidence — show warn
-    showScanResult('warn', 'Possible goal (low conf) — ' + diagnostic, 2000);
-  } else if (eitherSeenBall) {
-    showScanResult('ok', diagnostic, 1800);
-  } else {
-    showScanResult('warn', 'No ball seen — ' + diagnostic, 1800);
-  }
-
+  showScanResult('ok', result.observation || 'No goal', 1800);
   scheduleNextScan();
 }
 
@@ -652,26 +631,14 @@ function showScanResult(type, text, duration) {
   }, duration);
 }
 
-function captureGoalCrops() {
+function captureFrame() {
   const video = document.getElementById('cameraVideo');
   if (!video.videoWidth) return null;
   const canvas = document.getElementById('captureCanvas');
-  const ctx = canvas.getContext('2d');
-
-  const vw = video.videoWidth;
-  const vh = video.videoHeight;
-  const cropW = Math.round(vw * 0.40);
-  const outW = 480;
-  const outH = Math.round(outW * vh / cropW);
-
-  function cropSide(srcX) {
-    canvas.width = outW;
-    canvas.height = outH;
-    ctx.drawImage(video, srcX, 0, cropW, vh, 0, 0, outW, outH);
-    return canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
-  }
-
-  return { left: cropSide(0), right: cropSide(vw - cropW) };
+  canvas.width = 512;
+  canvas.height = Math.round(512 * video.videoHeight / video.videoWidth);
+  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
 }
 
 async function callVision(base64Jpg) {
