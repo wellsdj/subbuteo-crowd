@@ -9,12 +9,10 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --green:  #22c55e;
-    --red:    #ef4444;
-    --amber:  #f59e0b;
-    --blue:   #3b82f6;
+    --red:     #cc0000;
+    --red-dim: #991a1a;
     --bg:     #000;
-    --surface:#0f0f0f;
+    --surface: #0d0d0d;
     --border: #1c1c1c;
     --text:   #fff;
     --muted:  #555;
@@ -24,6 +22,7 @@
     background: var(--bg);
     color: var(--text);
     font-family: 'Inter', sans-serif;
+    letter-spacing: 0.3px;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -33,13 +32,22 @@
   /* ── Splash ── */
   .splash {
     position: fixed; inset: 0;
-    background: var(--bg);
+    background: radial-gradient(ellipse at 50% 120%, #1a0000 0%, #0a0000 40%, #000 100%);
     z-index: 999;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
     gap: 40px; padding: 32px;
   }
-  .splash-logo { font-size: 13px; font-weight: 600; letter-spacing: 8px; color: var(--muted); text-transform: uppercase; }
+  .splash::before {
+    content: "";
+    position: absolute; inset: 0;
+    background:
+      linear-gradient(to bottom, transparent 49%, rgba(255,255,255,0.04) 49%, rgba(255,255,255,0.04) 51%, transparent 51%),
+      radial-gradient(ellipse 60% 30% at 50% 50%, transparent 59%, rgba(255,255,255,0.04) 59%, rgba(255,255,255,0.04) 61%, transparent 61%);
+    pointer-events: none;
+  }
+  .splash-logo { font-size: 11px; font-weight: 600; letter-spacing: 10px; color: var(--muted); text-transform: uppercase; }
+  .splash-logo::after { content: ""; display: block; margin: 8px auto 0; width: 40px; height: 1px; background: var(--red); }
   .splash-form { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; max-width: 300px; }
   .splash-input {
     width: 100%; background: var(--surface); border: 1px solid var(--border);
@@ -47,29 +55,29 @@
     padding: 14px 16px; text-align: center; letter-spacing: 3px;
     transition: border-color 0.2s;
   }
-  .splash-input:focus { outline: none; border-color: var(--green); }
+  .splash-input:focus { outline: none; border-color: var(--red); }
   .splash-input.error { border-color: var(--red); animation: shake 0.3s ease; }
   @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
   .splash-btn {
-    width: 100%; background: var(--green); border: none; border-radius: 10px;
-    color: #000; font-size: 15px; font-weight: 700; padding: 14px;
+    width: 100%; background: var(--red); border: none; border-radius: 10px;
+    color: #fff; font-size: 15px; font-weight: 700; padding: 14px;
     cursor: pointer; letter-spacing: 1px; transition: opacity 0.15s;
   }
-  .splash-btn:hover { opacity: 0.85; }
+  .splash-btn:hover { background: var(--red-dim); }
   .splash-btn:disabled { opacity: 0.35; cursor: not-allowed; }
   .splash-error { font-size: 13px; color: var(--red); min-height: 18px; }
 
   /* ── Goal popup ── */
   .goal-popup {
     position: fixed; inset: 0; z-index: 800;
-    background: rgba(0,0,0,0.85);
+    background: rgba(0,0,0,0.9);
     display: flex; align-items: center; justify-content: center;
     opacity: 0; pointer-events: none;
     transition: opacity 0.2s;
   }
   .goal-popup.visible { opacity: 1; pointer-events: all; }
   .goal-card {
-    background: var(--surface); border: 1px solid var(--border);
+    background: var(--surface); border: 1px solid var(--red);
     border-radius: 20px; padding: 40px 48px;
     display: flex; flex-direction: column; align-items: center;
     gap: 12px; position: relative; max-width: 320px; width: 90%;
@@ -82,11 +90,11 @@
   }
   .goal-dismiss:hover { color: var(--text); }
   .goal-emoji { font-size: 52px; line-height: 1; }
-  .goal-title { font-size: 26px; font-weight: 700; letter-spacing: 2px; }
+  .goal-title { font-size: 26px; font-weight: 700; letter-spacing: 4px; color: var(--red); }
   .goal-sub { font-size: 13px; color: var(--muted); }
 
   /* ── Flash overlay ── */
-  .flash { position: fixed; inset: 0; z-index: 700; pointer-events: none; opacity: 0; transition: opacity 0.08s; }
+  .flash { position: fixed; inset: 0; z-index: 700; pointer-events: none; opacity: 0; transition: opacity 0.08s; background: var(--red); }
 
   /* ── Main layout ── */
   .app {
@@ -122,20 +130,20 @@
   }
   .mic-btn:hover { border-color: #333; }
   .mic-btn.listening {
-    border-color: var(--green);
-    box-shadow: 0 0 0 4px rgba(34,197,94,0.15);
+    border-color: var(--red);
+    box-shadow: 0 0 0 4px rgba(204,0,0,0.2);
     animation: mic-pulse 2s ease-in-out infinite;
   }
   @keyframes mic-pulse {
-    0%, 100% { box-shadow: 0 0 0 4px rgba(34,197,94,0.15); }
-    50%       { box-shadow: 0 0 0 12px rgba(34,197,94,0.05); }
+    0%, 100% { box-shadow: 0 0 0 4px rgba(204,0,0,0.2); }
+    50%       { box-shadow: 0 0 0 12px rgba(204,0,0,0.08); }
   }
 
   .mic-label {
     font-size: 12px; font-weight: 600; letter-spacing: 2px;
     text-transform: uppercase; color: var(--muted);
   }
-  .mic-label.listening { color: var(--green); }
+  .mic-label.listening { color: var(--red); }
 
   /* ── Sound bars ── */
   .sound-bars {
@@ -146,7 +154,7 @@
   .sound-bars.active { opacity: 1; }
   .sound-bar {
     width: 4px; border-radius: 2px;
-    background: var(--green);
+    background: var(--red);
     animation: bar-dance 0.8s ease-in-out infinite alternate;
   }
   .sound-bar:nth-child(1) { height: 8px;  animation-delay: 0s;    animation-duration: 0.7s; }
@@ -188,16 +196,16 @@
   }
   .hand-btn:hover { border-color: #333; }
   .hand-btn.active {
-    border-color: #a855f7;
-    box-shadow: 0 0 0 4px rgba(168,85,247,0.15);
+    border-color: var(--red);
+    box-shadow: 0 0 0 4px rgba(204,0,0,0.2);
     animation: hand-pulse 2s ease-in-out infinite;
   }
   @keyframes hand-pulse {
-    0%, 100% { box-shadow: 0 0 0 4px rgba(168,85,247,0.15); }
-    50%       { box-shadow: 0 0 0 12px rgba(168,85,247,0.05); }
+    0%, 100% { box-shadow: 0 0 0 4px rgba(204,0,0,0.2); }
+    50%       { box-shadow: 0 0 0 12px rgba(204,0,0,0.08); }
   }
   .hand-label { font-size: 12px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
-  .hand-label.active { color: #a855f7; }
+  .hand-label.active { color: var(--red); }
   .gesture-preview {
     width: 120px; height: 80px; border-radius: 10px;
     object-fit: cover; display: none;
@@ -206,13 +214,13 @@
   .gesture-preview.visible { display: block; }
   .gesture-tag {
     font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
-    text-transform: uppercase; color: #a855f7;
+    text-transform: uppercase; color: var(--red);
     min-height: 16px; text-align: center;
   }
 
   /* ── Bottom panel ── */
   .bottom-panel {
-    background: var(--bg); border-top: 1px solid var(--border);
+    background: #0d0d0d; border-top: 1px solid #1c1c1c;
     padding: 20px 16px 32px;
     display: flex; flex-direction: column; gap: 16px;
   }
@@ -220,7 +228,7 @@
   /* Reactions grid */
   .reactions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .r-btn {
-    background: var(--surface); border: 1px solid var(--border);
+    background: #0d0d0d; border: 1px solid #1c1c1c;
     border-radius: 12px; color: var(--text);
     padding: 14px 12px; cursor: pointer;
     display: flex; align-items: center; gap: 10px;
@@ -228,7 +236,7 @@
     transition: background 0.15s, border-color 0.15s;
     position: relative; overflow: hidden;
   }
-  .r-btn:hover { background: #1a1a1a; border-color: #333; }
+  .r-btn:hover { background: #120000; border-color: var(--red); }
   .r-btn .r-icon { font-size: 18px; }
   .r-btn .r-label { flex: 1; text-align: left; }
   .r-btn .r-desc { font-size: 10px; color: var(--muted); }
@@ -238,13 +246,13 @@
     display: flex; align-items: center; gap: 12px;
   }
   .crowd-toggle {
-    background: var(--surface); border: 1px solid var(--border);
+    background: var(--surface); border: 1px solid #1c1c1c;
     border-radius: 10px; color: var(--text);
     font-size: 13px; font-weight: 600; padding: 11px 18px;
     cursor: pointer; white-space: nowrap;
     transition: all 0.15s; display: flex; align-items: center; gap: 7px;
   }
-  .crowd-toggle.active { background: var(--green); border-color: var(--green); color: #000; }
+  .crowd-toggle.active { background: var(--red); border-color: var(--red); color: #fff; }
   .crowd-vol { flex: 1; -webkit-appearance: none; height: 3px; border-radius: 2px; background: var(--border); cursor: pointer; }
   .crowd-vol::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--text); }
 
