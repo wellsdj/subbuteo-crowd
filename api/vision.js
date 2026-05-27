@@ -1,13 +1,17 @@
-const GOAL_PROMPT = `The camera is positioned right up against a Subbuteo miniature football goal. The goal fills most of the frame.
+const GOAL_PROMPT = `The camera is pointing at a Subbuteo miniature football goal from close range.
 
-Answer two questions:
-1. Can you see the small round Subbuteo ball anywhere in this image?
-2. Is the ball inside the goal net (behind the goal line)?
+Answer two separate questions:
 
-Rules:
-- ballSeen: true if the ball is visible anywhere in the frame
-- inGoal: true ONLY if the ball is clearly inside the net, behind the goal line — not in front, not beside
-- Do not say inGoal: true unless you are confident
+QUESTION 1 — ballSeen: Can you see the small round ball anywhere in the image at all?
+- true if the ball is visible anywhere, even in front of or beside the goal
+- false if no ball is visible
+
+QUESTION 2 — inGoal: Is the ball physically inside the goal net, behind the goal line?
+- true ONLY if the ball is sitting inside the net, clearly past the goal posts
+- false if the ball is in FRONT of the goal, even touching the posts
+- false if the ball is to the side of the goal
+- false if you can see the ball but it has not crossed the goal line
+- IMPORTANT: seeing the ball does NOT mean it is in the goal. Most of the time the ball will be visible but NOT in the goal.
 
 Respond ONLY with valid JSON, no other text:
 {"ballSeen": true or false, "inGoal": true or false, "confidence": "high" or "medium" or "low", "observation": "one short sentence"}`;
