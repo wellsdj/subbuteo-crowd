@@ -1,17 +1,19 @@
-const GOAL_PROMPT = `This image shows ONLY the inside of a Subbuteo miniature football goal net, cropped tightly to the net interior.
+const GOAL_PROMPT = `You are looking at the inside of a Subbuteo miniature football goal. Here is exactly what you will see:
 
-IMPORTANT — there will almost always be a GOALKEEPER figure visible in this image. The goalkeeper is a small plastic figure on a round flat base, attached to a long thin rod or pole that slides across the goal. This is normal. The goalkeeper is NOT the ball.
+THE GOAL FRAME: White plastic rectangular posts and crossbar. Red/orange string net forming a grid pattern inside.
 
-Your only job: is there a small round BALL visible in the net, separate from the goalkeeper figure?
+THE GOALKEEPER: Always present. A small green plastic figure standing upright on a flat circular white disc base. The base and figure are mounted on a long white plastic rod that extends out through the front of the goal. The goalkeeper is always there — ignore it completely.
 
-The BALL is:
-- Small and round, like a tiny soccer ball
-- Separate from the goalkeeper and its base
-- Sits on the felt surface or rests in the net
+THE BALL (if present): A large white sphere, smooth and round. Noticeably larger than the goalkeeper's disc base. It will sit on the green felt surface inside the net. It is very clearly a ball — round, white, solid.
 
-ballSeen = true ONLY if you can see the ball itself, not just the goalkeeper figure or its base.
+YOUR TASK: Is the white ball present inside the net, separate from the goalkeeper figure?
 
-Respond ONLY with valid JSON, no other text:
+- YES (ballSeen: true) if you can see the large white sphere sitting in the net
+- NO (ballSeen: false) if you only see the goalkeeper figure and empty net — no ball
+
+Think carefully. The goalkeeper base is a flat disc on a rod. The ball is a large round sphere sitting on the surface. They look completely different.
+
+Respond ONLY with valid JSON:
 {"ballSeen": true or false, "confidence": "high" or "medium" or "low", "observation": "one short sentence"}`;
 
 module.exports = async function handler(req, res) {
@@ -31,8 +33,9 @@ module.exports = async function handler(req, res) {
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 60,
+      model: 'claude-sonnet-4-5-20251001',
+      max_tokens: 1200,
+      thinking: { type: 'enabled', budget_tokens: 1024 },
       messages: [{
         role: 'user',
         content: [

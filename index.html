@@ -780,10 +780,13 @@ async function callVision(base64Jpg) {
     const msg = data.error?.message || data.error || ('HTTP ' + resp.status);
     throw new Error(msg);
   }
-  if (!data.content || !data.content[0]) {
+  if (!data.content || !data.content.length) {
     throw new Error('Unexpected API response: ' + JSON.stringify(data).slice(0, 120));
   }
-  const raw = data.content[0].text.trim();
+  // With thinking enabled the response has a thinking block then a text block
+  const textBlock = data.content.find(b => b.type === 'text');
+  if (!textBlock) throw new Error('No text block in response');
+  const raw = textBlock.text.trim();
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('No JSON in response: ' + raw.slice(0, 80));
   return JSON.parse(match[0]);
