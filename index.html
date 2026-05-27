@@ -541,8 +541,10 @@ let detectionActive = false;
 let detectionTimer  = null;
 let detectionStream = null;
 let lastGoalTime    = 0;
-const GOAL_COOLDOWN = 15000;
-const SCAN_INTERVAL = 5000;
+const GOAL_COOLDOWN  = 15000;
+const INTERVAL_SLOW  = 5000; // no ball visible
+const INTERVAL_FAST  = 2000; // ball visible in frame
+let   ballInFrame    = false;
 
 async function startDetection() {
   try {
@@ -568,6 +570,7 @@ function stopDetection() {
   clearTimeout(detectionTimer);
   if (detectionStream) { detectionStream.getTracks().forEach(t => t.stop()); detectionStream = null; }
   detectionActive = false;
+  ballInFrame = false;
   document.getElementById('cameraVideo').srcObject = null;
   document.getElementById('cameraIdle').classList.remove('hidden');
   document.getElementById('stopBtn').classList.remove('visible');
@@ -577,7 +580,7 @@ function stopDetection() {
 function scheduleNextScan() {
   clearTimeout(detectionTimer);
   if (!detectionActive) return;
-  detectionTimer = setTimeout(runScan, SCAN_INTERVAL);
+  detectionTimer = setTimeout(runScan, ballInFrame ? INTERVAL_FAST : INTERVAL_SLOW);
 }
 
 async function runScan() {
@@ -600,6 +603,8 @@ async function runScan() {
   setScanPip('idle');
   console.log('SCAN:', JSON.stringify(result));
 
+  ballInFrame = result.ballSeen === true;
+
   if (result.inGoal === true) {
     const now = Date.now();
     if (now - lastGoalTime > GOAL_COOLDOWN) {
@@ -616,7 +621,8 @@ async function runScan() {
     return;
   }
 
-  showScanResult('ok', result.observation || 'No goal', 1800);
+  const interval = ballInFrame ? '2s' : '5s';
+  showScanResult(ballInFrame ? 'ok' : 'warn', `[${interval}] ${result.observation || 'No goal'}`, 1800);
   scheduleNextScan();
 }
 

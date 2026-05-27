@@ -1,13 +1,16 @@
-const GOAL_PROMPT = `The camera is positioned right up against a Subbuteo miniature football goal. The goal fills most of the frame. There may or may not be a small round ball inside the goal net.
+const GOAL_PROMPT = `The camera is positioned right up against a Subbuteo miniature football goal. The goal fills most of the frame.
 
-Is the ball inside the goal net right now?
+Answer two questions:
+1. Can you see the small round Subbuteo ball anywhere in this image?
+2. Is the ball inside the goal net (behind the goal line)?
 
-- YES (inGoal: true) only if the ball is clearly sitting inside the net, behind the goal line
-- NO (inGoal: false) if the ball is not visible, is in front of the goal, or is beside the goal
-- Do not say inGoal: true unless you are confident the ball is inside the net
+Rules:
+- ballSeen: true if the ball is visible anywhere in the frame
+- inGoal: true ONLY if the ball is clearly inside the net, behind the goal line — not in front, not beside
+- Do not say inGoal: true unless you are confident
 
 Respond ONLY with valid JSON, no other text:
-{"inGoal": true or false, "confidence": "high" or "medium" or "low", "observation": "one short sentence"}`;
+{"ballSeen": true or false, "inGoal": true or false, "confidence": "high" or "medium" or "low", "observation": "one short sentence"}`;
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
