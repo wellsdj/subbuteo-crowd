@@ -575,13 +575,16 @@ function startListening() {
 
     showTranscript(transcript);
 
-    if (transcript.includes('goal')) {
+    const GOAL_PHRASES = ['goal', "it's in", 'its in', "it's a go", 'its a go', 'banger', 'smashed it'];
+    const isGoal = GOAL_PHRASES.some(p => transcript.includes(p));
+
+    if (isGoal) {
       const now = Date.now();
       if (now - lastGoalTime > GOAL_COOLDOWN) {
         lastGoalTime = now;
         triggerReaction('goal', null);
         showGoalPopup();
-        recognition.stop(); // brief pause then restart
+        recognition.stop();
         setTimeout(startListening, 2000);
       }
     }
