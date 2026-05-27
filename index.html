@@ -95,103 +95,77 @@
     min-height: 100vh;
   }
 
-  /* ── Camera section ── */
-  .camera-section {
-    position: relative; flex: 1;
-    background: #060606;
-    min-height: 260px;
+  /* ── Mic section ── */
+  .mic-section {
+    flex: 1;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    min-height: 320px;
+    padding: 40px 24px;
   }
-  .camera-section video {
-    width: 100%; height: 100%;
-    object-fit: cover; display: block;
-  }
-  .camera-idle {
-    position: absolute; inset: 0;
+
+  .mic-btn {
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    color: var(--text);
+    font-size: 32px;
+    cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    flex-direction: column; gap: 16px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    position: relative;
   }
-  .camera-idle.hidden { display: none; }
-  .start-btn {
-    background: var(--green); border: none; border-radius: 50px;
-    color: #000; font-size: 15px; font-weight: 700;
-    padding: 14px 32px; cursor: pointer; letter-spacing: 0.5px;
-    transition: opacity 0.15s; display: flex; align-items: center; gap: 8px;
+  .mic-btn:hover { border-color: #333; }
+  .mic-btn.listening {
+    border-color: var(--green);
+    box-shadow: 0 0 0 4px rgba(34,197,94,0.15);
+    animation: mic-pulse 2s ease-in-out infinite;
   }
-  .start-btn:hover { opacity: 0.85; }
-  .camera-hint { font-size: 12px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+  @keyframes mic-pulse {
+    0%, 100% { box-shadow: 0 0 0 4px rgba(34,197,94,0.15); }
+    50%       { box-shadow: 0 0 0 12px rgba(34,197,94,0.05); }
+  }
 
-  /* ── Crop overlay ── */
-  #cropCanvas {
-    position: absolute; inset: 0;
-    width: 100%; height: 100%;
-    cursor: crosshair; z-index: 20;
+  .mic-label {
+    font-size: 12px; font-weight: 600; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--muted);
   }
-  .crop-ui {
-    position: absolute; inset: 0;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: flex-end;
-    padding-bottom: 18px; gap: 10px; z-index: 21;
-    pointer-events: none;
-  }
-  .crop-ui.hidden { display: none; }
-  .crop-instructions {
-    font-size: 12px; color: #fff; background: rgba(0,0,0,0.65);
-    padding: 6px 14px; border-radius: 8px; letter-spacing: 0.5px;
-    text-transform: uppercase; text-align: center;
-  }
-  .crop-confirm {
-    pointer-events: all;
-    background: var(--green); border: none; border-radius: 50px;
-    color: #000; font-size: 14px; font-weight: 700;
-    padding: 11px 28px; cursor: pointer; opacity: 0.4;
-    transition: opacity 0.2s;
-  }
-  .crop-confirm.ready { opacity: 1; }
+  .mic-label.listening { color: var(--green); }
 
-  /* ── Scan result bubble ── */
-  .scan-result {
-    position: absolute; bottom: 14px;
-    left: 50%; transform: translateX(-50%);
-    border-radius: 10px; padding: 10px 18px;
-    font-size: 13px; font-weight: 600; color: #fff;
-    pointer-events: none; opacity: 0; transition: opacity 0.2s;
-    max-width: 88%; text-align: center; z-index: 10;
+  /* ── Sound bars ── */
+  .sound-bars {
+    display: flex; align-items: center; gap: 4px;
+    height: 32px; opacity: 0;
+    transition: opacity 0.3s;
   }
-  .scan-result.show  { opacity: 1; }
-  .scan-result.ok    { background: rgba(34,197,94,0.92); }
-  .scan-result.warn  { background: rgba(245,158,11,0.92); }
-  .scan-result.error { background: rgba(239,68,68,0.95); animation: red-flash 0.35s infinite alternate; }
-  @keyframes red-flash { from{opacity:1} to{opacity:0.5} }
-
-  /* scanning indicator — top-right corner of camera */
-  .scan-pip {
-    position: absolute; top: 14px; right: 14px;
-    display: flex; align-items: center; gap: 6px;
-    background: rgba(0,0,0,0.6); border-radius: 20px;
-    padding: 5px 10px; opacity: 0; transition: opacity 0.3s;
-    pointer-events: none;
-  }
-  .scan-pip.visible { opacity: 1; }
-  .scan-dot {
-    width: 7px; height: 7px; border-radius: 50%;
+  .sound-bars.active { opacity: 1; }
+  .sound-bar {
+    width: 4px; border-radius: 2px;
     background: var(--green);
-    animation: pip-pulse 2s infinite;
+    animation: bar-dance 0.8s ease-in-out infinite alternate;
   }
-  .scan-pip.scanning .scan-dot { animation: pip-pulse 0.6s infinite; background: var(--amber); }
-  @keyframes pip-pulse { 0%,100%{opacity:1} 50%{opacity:0.25} }
-  .scan-label { font-size: 11px; color: #fff; font-weight: 500; letter-spacing: 0.5px; }
+  .sound-bar:nth-child(1) { height: 8px;  animation-delay: 0s;    animation-duration: 0.7s; }
+  .sound-bar:nth-child(2) { height: 20px; animation-delay: 0.1s;  animation-duration: 0.9s; }
+  .sound-bar:nth-child(3) { height: 28px; animation-delay: 0.05s; animation-duration: 0.6s; }
+  .sound-bar:nth-child(4) { height: 16px; animation-delay: 0.15s; animation-duration: 0.8s; }
+  .sound-bar:nth-child(5) { height: 10px; animation-delay: 0.2s;  animation-duration: 1.0s; }
+  @keyframes bar-dance {
+    from { transform: scaleY(0.3); opacity: 0.6; }
+    to   { transform: scaleY(1.2); opacity: 1; }
+  }
 
-  /* stop button overlay */
-  .stop-btn {
-    position: absolute; top: 14px; left: 14px;
-    background: rgba(0,0,0,0.6); border: 1px solid #333;
-    border-radius: 20px; color: var(--muted);
-    font-size: 12px; padding: 5px 12px; cursor: pointer;
-    display: none; align-items: center; gap: 5px;
-    transition: color 0.15s, border-color 0.15s;
+  /* ── Transcript ── */
+  .transcript {
+    font-size: 12px; color: var(--muted);
+    text-align: center; max-width: 320px;
+    min-height: 18px; line-height: 1.5;
+    font-style: italic;
   }
-  .stop-btn.visible { display: flex; }
-  .stop-btn:hover { color: var(--red); border-color: var(--red); }
 
   /* ── Bottom panel ── */
   .bottom-panel {
@@ -253,7 +227,7 @@
     <button class="goal-dismiss" onclick="dismissGoal()">&#x2715;</button>
     <div class="goal-emoji">&#x26bd;</div>
     <div class="goal-title">GOAL</div>
-    <div class="goal-sub">Ball detected in the goal</div>
+    <div class="goal-sub">Goal detected!</div>
   </div>
 </div>
 
@@ -262,37 +236,21 @@
 
 <div class="app">
 
-  <!-- Camera -->
-  <div class="camera-section">
-    <video id="cameraVideo" autoplay muted playsinline></video>
-    <canvas id="captureCanvas" style="display:none"></canvas>
-
-    <!-- Crop drawing overlay (shown during setup) -->
-    <canvas id="cropCanvas" style="display:none"></canvas>
-    <div class="crop-ui hidden" id="cropUi">
-      <div class="crop-instructions">Draw a box around the inside of the goal net</div>
-      <button class="crop-confirm" id="cropConfirm" onclick="confirmCrop()">Start Scanning</button>
+  <!-- Mic section -->
+  <div class="mic-section">
+    <div class="sound-bars" id="soundBars">
+      <div class="sound-bar"></div>
+      <div class="sound-bar"></div>
+      <div class="sound-bar"></div>
+      <div class="sound-bar"></div>
+      <div class="sound-bar"></div>
     </div>
 
-    <!-- Idle state -->
-    <div class="camera-idle" id="cameraIdle">
-      <button class="start-btn" onclick="startDetection()">
-        <span>&#9679;</span> Start Detection
-      </button>
-      <div class="camera-hint">Point camera directly at one goal, close up</div>
-    </div>
+    <button class="mic-btn" id="micBtn" onclick="toggleListening()">&#x1F3A4;</button>
 
-    <!-- Active: stop button top-left -->
-    <button class="stop-btn" id="stopBtn" onclick="stopDetection()">&#x25A0; Stop</button>
+    <div class="mic-label" id="micLabel">Tap to start</div>
 
-    <!-- Scan result bubble -->
-    <div class="scan-result" id="scanResult"></div>
-
-    <!-- Scanning pip top-right -->
-    <div class="scan-pip" id="scanPip">
-      <div class="scan-dot"></div>
-      <span class="scan-label" id="scanLabel">Live</span>
-    </div>
+    <div class="transcript" id="transcript"></div>
   </div>
 
   <!-- Bottom panel -->
@@ -571,239 +529,81 @@ function dismissGoal() {
   document.getElementById('goalPopup').classList.remove('visible');
 }
 
-// ── Vision ──
-let detectionActive = false;
-let detectionTimer  = null;
-let detectionStream = null;
-let lastGoalTime    = 0;
-const GOAL_COOLDOWN  = 15000;
-const INTERVAL_SLOW  = 5000;
-const INTERVAL_FAST  = 2000;
-let   ballInFrame    = false;
+// ── Speech recognition ──
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let listening = false;
+const GOAL_COOLDOWN = 15000;
+let lastGoalTime = 0;
 
-// cropRect: fractional coords of the drawn goal box {x, y, w, h} 0..1
-let cropRect = null;
-
-// ── Crop drawing ──
-let cropDrag = null;
-let cropDrawn = null; // {x1,y1,x2,y2} in canvas pixels during drawing
-
-function initCropCanvas() {
-  const cc = document.getElementById('cropCanvas');
-  const section = cc.parentElement;
-  cc.width  = section.clientWidth;
-  cc.height = section.clientHeight;
-
-  cc.addEventListener('mousedown',  e => startDrag(e.offsetX, e.offsetY));
-  cc.addEventListener('mousemove',  e => { if (cropDrag) updateDrag(e.offsetX, e.offsetY); });
-  cc.addEventListener('mouseup',    e => endDrag(e.offsetX, e.offsetY));
-  cc.addEventListener('touchstart', e => { e.preventDefault(); const t = e.touches[0]; const r = cc.getBoundingClientRect(); startDrag(t.clientX-r.left, t.clientY-r.top); }, {passive:false});
-  cc.addEventListener('touchmove',  e => { e.preventDefault(); const t = e.touches[0]; const r = cc.getBoundingClientRect(); if (cropDrag) updateDrag(t.clientX-r.left, t.clientY-r.top); }, {passive:false});
-  cc.addEventListener('touchend',   e => { e.preventDefault(); const t = e.changedTouches[0]; const r = cc.getBoundingClientRect(); endDrag(t.clientX-r.left, t.clientY-r.top); }, {passive:false});
+function showTranscript(text) {
+  document.getElementById('transcript').textContent = text;
 }
 
-function startDrag(x, y) { cropDrag = {x, y}; cropDrawn = null; drawCropOverlay(); }
-function updateDrag(x, y) { cropDrawn = {x1: cropDrag.x, y1: cropDrag.y, x2: x, y2: y}; drawCropOverlay(); }
-function endDrag(x, y) {
-  cropDrawn = {x1: cropDrag.x, y1: cropDrag.y, x2: x, y2: y};
-  cropDrag = null;
-  drawCropOverlay();
-  const cc = document.getElementById('cropCanvas');
-  const w = Math.abs(cropDrawn.x2 - cropDrawn.x1), h = Math.abs(cropDrawn.y2 - cropDrawn.y1);
-  const ready = w > 30 && h > 30;
-  document.getElementById('cropConfirm').classList.toggle('ready', ready);
-}
-
-function drawCropOverlay() {
-  const cc = document.getElementById('cropCanvas');
-  const ctx2 = cc.getContext('2d');
-  ctx2.clearRect(0, 0, cc.width, cc.height);
-  if (!cropDrawn) return;
-  const {x1,y1,x2,y2} = cropDrawn;
-  const rx = Math.min(x1,x2), ry = Math.min(y1,y2), rw = Math.abs(x2-x1), rh = Math.abs(y2-y1);
-  // dim everything outside
-  ctx2.fillStyle = 'rgba(0,0,0,0.5)';
-  ctx2.fillRect(0, 0, cc.width, cc.height);
-  ctx2.clearRect(rx, ry, rw, rh);
-  // bright border
-  ctx2.strokeStyle = '#22c55e';
-  ctx2.lineWidth = 2;
-  ctx2.strokeRect(rx, ry, rw, rh);
-}
-
-function confirmCrop() {
-  if (!cropDrawn) return;
-  const cc = document.getElementById('cropCanvas');
-  const {x1,y1,x2,y2} = cropDrawn;
-  cropRect = {
-    x: Math.min(x1,x2) / cc.width,
-    y: Math.min(y1,y2) / cc.height,
-    w: Math.abs(x2-x1) / cc.width,
-    h: Math.abs(y2-y1) / cc.height
-  };
-  // hide crop UI, start scanning
-  document.getElementById('cropCanvas').style.display = 'none';
-  document.getElementById('cropUi').classList.add('hidden');
-  document.getElementById('stopBtn').classList.add('visible');
-  setScanPip('idle');
-  detectionActive = true;
-  scheduleNextScan();
-}
-
-async function startDetection() {
-  try {
-    detectionStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 } } });
-    const video = document.getElementById('cameraVideo');
-    video.srcObject = detectionStream;
-    await new Promise(res => { video.onloadedmetadata = res; });
-
-    if (!ctx) await initAudio();
-    await Promise.all([loadGoalBuffer(), loadNearMissBuffer()]);
-
-    document.getElementById('cameraIdle').classList.add('hidden');
-    // show crop UI
-    document.getElementById('cropCanvas').style.display = 'block';
-    document.getElementById('cropUi').classList.remove('hidden');
-    initCropCanvas();
-  } catch(err) {
-    console.error('Camera error:', err.message);
+function updateMicUI() {
+  const btn   = document.getElementById('micBtn');
+  const label = document.getElementById('micLabel');
+  const bars  = document.getElementById('soundBars');
+  if (listening) {
+    btn.classList.add('listening');
+    label.textContent = 'Listening...';
+    label.classList.add('listening');
+    bars.classList.add('active');
+  } else {
+    btn.classList.remove('listening');
+    label.textContent = 'Tap to start';
+    label.classList.remove('listening');
+    bars.classList.remove('active');
   }
 }
 
-function stopDetection() {
-  clearTimeout(detectionTimer);
-  if (detectionStream) { detectionStream.getTracks().forEach(t => t.stop()); detectionStream = null; }
-  detectionActive = false;
-  ballInFrame = false;
-  cropRect = null;
-  cropDrawn = null;
-  document.getElementById('cameraVideo').srcObject = null;
-  document.getElementById('cameraIdle').classList.remove('hidden');
-  document.getElementById('stopBtn').classList.remove('visible');
-  document.getElementById('cropCanvas').style.display = 'none';
-  document.getElementById('cropUi').classList.add('hidden');
-  document.getElementById('cropConfirm').classList.remove('ready');
-  setScanPip('off');
-}
-
-function scheduleNextScan() {
-  clearTimeout(detectionTimer);
-  if (!detectionActive) return;
-  detectionTimer = setTimeout(runScan, ballInFrame ? INTERVAL_FAST : INTERVAL_SLOW);
-}
-
-async function runScan() {
-  if (!detectionActive) return;
-  setScanPip('scanning');
-
-  const frame = captureFrame();
-  if (!frame) { setScanPip('idle'); scheduleNextScan(); return; }
-
-  let result;
-  try {
-    result = await callVision(frame);
-  } catch(err) {
-    setScanPip('idle');
-    showScanResult('error', 'API error: ' + err.message, 3000);
-    scheduleNextScan();
+function startListening() {
+  if (!SpeechRecognition) {
+    showTranscript('Speech recognition not supported in this browser.');
     return;
   }
+  recognition = new SpeechRecognition();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = 'en-GB';
 
-  setScanPip('idle');
-  console.log('SCAN:', JSON.stringify(result));
+  recognition.onresult = (event) => {
+    const transcript = Array.from(event.results)
+      .map(r => r[0].transcript)
+      .join(' ')
+      .toLowerCase();
 
-  ballInFrame = result.ballSeen === true;
+    showTranscript(transcript);
 
-  if (result.ballSeen === true) {
-    const now = Date.now();
-    if (now - lastGoalTime > GOAL_COOLDOWN) {
-      lastGoalTime = now;
-      showScanResult('ok', 'GOAL!', 1000);
-      setTimeout(() => {
+    if (transcript.includes('goal')) {
+      const now = Date.now();
+      if (now - lastGoalTime > GOAL_COOLDOWN) {
+        lastGoalTime = now;
         triggerReaction('goal', null);
         showGoalPopup();
-        stopDetection();
-      }, 600);
-    } else {
-      scheduleNextScan();
+        recognition.stop(); // brief pause then restart
+        setTimeout(startListening, 2000);
+      }
     }
-    return;
-  }
+  };
 
-  showScanResult('warn', result.observation || 'No ball in goal', 1800);
-  scheduleNextScan();
+  recognition.onerror = (e) => { if (e.error !== 'no-speech') stopListening(); };
+  recognition.onend = () => { if (listening) recognition.start(); }; // auto-restart
+
+  listening = true;
+  recognition.start();
+  updateMicUI();
 }
 
-let scanResultTimer = null;
-function showScanResult(type, text, duration) {
-  const el = document.getElementById('scanResult');
-  el.textContent = text;
-  el.className = 'scan-result show ' + type;
-  clearTimeout(scanResultTimer);
-  scanResultTimer = setTimeout(() => {
-    el.classList.remove('show');
-  }, duration);
+function stopListening() {
+  listening = false;
+  if (recognition) recognition.stop();
+  updateMicUI();
 }
 
-function captureFrame() {
-  const video = document.getElementById('cameraVideo');
-  if (!video.videoWidth) return null;
-  const canvas = document.getElementById('captureCanvas');
-  const ctx2 = canvas.getContext('2d');
-
-  if (cropRect) {
-    // Crop to the user-drawn goal box
-    const sx = cropRect.x * video.videoWidth;
-    const sy = cropRect.y * video.videoHeight;
-    const sw = cropRect.w * video.videoWidth;
-    const sh = cropRect.h * video.videoHeight;
-    canvas.width  = 400;
-    canvas.height = Math.round(400 * sh / sw);
-    ctx2.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-  } else {
-    canvas.width  = 512;
-    canvas.height = Math.round(512 * video.videoHeight / video.videoWidth);
-    ctx2.drawImage(video, 0, 0, canvas.width, canvas.height);
-  }
-
-  return canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
-}
-
-async function callVision(base64Jpg) {
-  const resp = await fetch('/api/vision', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ image: base64Jpg })
-  });
-  const data = await resp.json();
-  if (!resp.ok) {
-    const msg = data.error?.message || data.error || ('HTTP ' + resp.status);
-    throw new Error(msg);
-  }
-  if (!data.content || !data.content.length) {
-    throw new Error('Unexpected API response: ' + JSON.stringify(data).slice(0, 120));
-  }
-  // With thinking enabled the response has a thinking block then a text block
-  const textBlock = data.content.find(b => b.type === 'text');
-  if (!textBlock) throw new Error('No text block in response');
-  const raw = textBlock.text.trim();
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('No JSON in response: ' + raw.slice(0, 80));
-  return JSON.parse(match[0]);
-}
-
-function setScanPip(state) {
-  const pip   = document.getElementById('scanPip');
-  const label = document.getElementById('scanLabel');
-  pip.className = 'scan-pip';
-  if (state === 'off') { return; }
-  pip.classList.add('visible');
-  if (state === 'scanning') {
-    pip.classList.add('scanning');
-    label.textContent = 'Checking…';
-  } else {
-    label.textContent = 'Live';
-  }
+function toggleListening() {
+  if (!ctx) initAudio(); // needs user gesture
+  if (listening) stopListening(); else startListening();
 }
 </script>
 </body>
