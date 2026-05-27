@@ -33,7 +33,7 @@ module.exports = async function handler(req, res) {
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-5-20251001',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1200,
       thinking: { type: 'enabled', budget_tokens: 1024 },
       messages: [{
