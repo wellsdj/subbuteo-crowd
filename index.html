@@ -120,6 +120,34 @@
   .start-btn:hover { opacity: 0.85; }
   .camera-hint { font-size: 12px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
 
+  /* ── Crop overlay ── */
+  #cropCanvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    cursor: crosshair; z-index: 20;
+  }
+  .crop-ui {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-end;
+    padding-bottom: 18px; gap: 10px; z-index: 21;
+    pointer-events: none;
+  }
+  .crop-ui.hidden { display: none; }
+  .crop-instructions {
+    font-size: 12px; color: #fff; background: rgba(0,0,0,0.65);
+    padding: 6px 14px; border-radius: 8px; letter-spacing: 0.5px;
+    text-transform: uppercase; text-align: center;
+  }
+  .crop-confirm {
+    pointer-events: all;
+    background: var(--green); border: none; border-radius: 50px;
+    color: #000; font-size: 14px; font-weight: 700;
+    padding: 11px 28px; cursor: pointer; opacity: 0.4;
+    transition: opacity 0.2s;
+  }
+  .crop-confirm.ready { opacity: 1; }
+
   /* ── Scan result bubble ── */
   .scan-result {
     position: absolute; bottom: 14px;
@@ -238,6 +266,13 @@
   <div class="camera-section">
     <video id="cameraVideo" autoplay muted playsinline></video>
     <canvas id="captureCanvas" style="display:none"></canvas>
+
+    <!-- Crop drawing overlay (shown during setup) -->
+    <canvas id="cropCanvas" style="display:none"></canvas>
+    <div class="crop-ui hidden" id="cropUi">
+      <div class="crop-instructions">Draw a box around the inside of the goal net</div>
+      <button class="crop-confirm" id="cropConfirm" onclick="confirmCrop()">Start Scanning</button>
+    </div>
 
     <!-- Idle state -->
     <div class="camera-idle" id="cameraIdle">
@@ -536,15 +571,84 @@ function dismissGoal() {
   document.getElementById('goalPopup').classList.remove('visible');
 }
 
-// ── Vision: goal detection only, every 5 s ──
+// ── Vision ──
 let detectionActive = false;
 let detectionTimer  = null;
 let detectionStream = null;
 let lastGoalTime    = 0;
 const GOAL_COOLDOWN  = 15000;
-const INTERVAL_SLOW  = 5000; // no ball visible
-const INTERVAL_FAST  = 2000; // ball visible in frame
+const INTERVAL_SLOW  = 5000;
+const INTERVAL_FAST  = 2000;
 let   ballInFrame    = false;
+
+// cropRect: fractional coords of the drawn goal box {x, y, w, h} 0..1
+let cropRect = null;
+
+// ── Crop drawing ──
+let cropDrag = null;
+let cropDrawn = null; // {x1,y1,x2,y2} in canvas pixels during drawing
+
+function initCropCanvas() {
+  const cc = document.getElementById('cropCanvas');
+  const section = cc.parentElement;
+  cc.width  = section.clientWidth;
+  cc.height = section.clientHeight;
+
+  cc.addEventListener('mousedown',  e => startDrag(e.offsetX, e.offsetY));
+  cc.addEventListener('mousemove',  e => { if (cropDrag) updateDrag(e.offsetX, e.offsetY); });
+  cc.addEventListener('mouseup',    e => endDrag(e.offsetX, e.offsetY));
+  cc.addEventListener('touchstart', e => { e.preventDefault(); const t = e.touches[0]; const r = cc.getBoundingClientRect(); startDrag(t.clientX-r.left, t.clientY-r.top); }, {passive:false});
+  cc.addEventListener('touchmove',  e => { e.preventDefault(); const t = e.touches[0]; const r = cc.getBoundingClientRect(); if (cropDrag) updateDrag(t.clientX-r.left, t.clientY-r.top); }, {passive:false});
+  cc.addEventListener('touchend',   e => { e.preventDefault(); const t = e.changedTouches[0]; const r = cc.getBoundingClientRect(); endDrag(t.clientX-r.left, t.clientY-r.top); }, {passive:false});
+}
+
+function startDrag(x, y) { cropDrag = {x, y}; cropDrawn = null; drawCropOverlay(); }
+function updateDrag(x, y) { cropDrawn = {x1: cropDrag.x, y1: cropDrag.y, x2: x, y2: y}; drawCropOverlay(); }
+function endDrag(x, y) {
+  cropDrawn = {x1: cropDrag.x, y1: cropDrag.y, x2: x, y2: y};
+  cropDrag = null;
+  drawCropOverlay();
+  const cc = document.getElementById('cropCanvas');
+  const w = Math.abs(cropDrawn.x2 - cropDrawn.x1), h = Math.abs(cropDrawn.y2 - cropDrawn.y1);
+  const ready = w > 30 && h > 30;
+  document.getElementById('cropConfirm').classList.toggle('ready', ready);
+}
+
+function drawCropOverlay() {
+  const cc = document.getElementById('cropCanvas');
+  const ctx2 = cc.getContext('2d');
+  ctx2.clearRect(0, 0, cc.width, cc.height);
+  if (!cropDrawn) return;
+  const {x1,y1,x2,y2} = cropDrawn;
+  const rx = Math.min(x1,x2), ry = Math.min(y1,y2), rw = Math.abs(x2-x1), rh = Math.abs(y2-y1);
+  // dim everything outside
+  ctx2.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx2.fillRect(0, 0, cc.width, cc.height);
+  ctx2.clearRect(rx, ry, rw, rh);
+  // bright border
+  ctx2.strokeStyle = '#22c55e';
+  ctx2.lineWidth = 2;
+  ctx2.strokeRect(rx, ry, rw, rh);
+}
+
+function confirmCrop() {
+  if (!cropDrawn) return;
+  const cc = document.getElementById('cropCanvas');
+  const {x1,y1,x2,y2} = cropDrawn;
+  cropRect = {
+    x: Math.min(x1,x2) / cc.width,
+    y: Math.min(y1,y2) / cc.height,
+    w: Math.abs(x2-x1) / cc.width,
+    h: Math.abs(y2-y1) / cc.height
+  };
+  // hide crop UI, start scanning
+  document.getElementById('cropCanvas').style.display = 'none';
+  document.getElementById('cropUi').classList.add('hidden');
+  document.getElementById('stopBtn').classList.add('visible');
+  setScanPip('idle');
+  detectionActive = true;
+  scheduleNextScan();
+}
 
 async function startDetection() {
   try {
@@ -556,11 +660,11 @@ async function startDetection() {
     if (!ctx) await initAudio();
     await Promise.all([loadGoalBuffer(), loadNearMissBuffer()]);
 
-    detectionActive = true;
     document.getElementById('cameraIdle').classList.add('hidden');
-    document.getElementById('stopBtn').classList.add('visible');
-    setScanPip('idle');
-    scheduleNextScan();
+    // show crop UI
+    document.getElementById('cropCanvas').style.display = 'block';
+    document.getElementById('cropUi').classList.remove('hidden');
+    initCropCanvas();
   } catch(err) {
     console.error('Camera error:', err.message);
   }
@@ -571,9 +675,14 @@ function stopDetection() {
   if (detectionStream) { detectionStream.getTracks().forEach(t => t.stop()); detectionStream = null; }
   detectionActive = false;
   ballInFrame = false;
+  cropRect = null;
+  cropDrawn = null;
   document.getElementById('cameraVideo').srcObject = null;
   document.getElementById('cameraIdle').classList.remove('hidden');
   document.getElementById('stopBtn').classList.remove('visible');
+  document.getElementById('cropCanvas').style.display = 'none';
+  document.getElementById('cropUi').classList.add('hidden');
+  document.getElementById('cropConfirm').classList.remove('ready');
   setScanPip('off');
 }
 
@@ -605,11 +714,11 @@ async function runScan() {
 
   ballInFrame = result.ballSeen === true;
 
-  if (result.inGoal === true) {
+  if (result.ballSeen === true) {
     const now = Date.now();
     if (now - lastGoalTime > GOAL_COOLDOWN) {
       lastGoalTime = now;
-      showScanResult('ok', 'GOAL — ' + (result.observation || ''), 1000);
+      showScanResult('ok', 'GOAL!', 1000);
       setTimeout(() => {
         triggerReaction('goal', null);
         showGoalPopup();
@@ -621,8 +730,7 @@ async function runScan() {
     return;
   }
 
-  const interval = ballInFrame ? '2s' : '5s';
-  showScanResult(ballInFrame ? 'ok' : 'warn', `[${interval}] ${result.observation || 'No goal'}`, 1800);
+  showScanResult('warn', result.observation || 'No ball in goal', 1800);
   scheduleNextScan();
 }
 
@@ -641,10 +749,24 @@ function captureFrame() {
   const video = document.getElementById('cameraVideo');
   if (!video.videoWidth) return null;
   const canvas = document.getElementById('captureCanvas');
-  canvas.width = 512;
-  canvas.height = Math.round(512 * video.videoHeight / video.videoWidth);
-  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+  const ctx2 = canvas.getContext('2d');
+
+  if (cropRect) {
+    // Crop to the user-drawn goal box
+    const sx = cropRect.x * video.videoWidth;
+    const sy = cropRect.y * video.videoHeight;
+    const sw = cropRect.w * video.videoWidth;
+    const sh = cropRect.h * video.videoHeight;
+    canvas.width  = 400;
+    canvas.height = Math.round(400 * sh / sw);
+    ctx2.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+  } else {
+    canvas.width  = 512;
+    canvas.height = Math.round(512 * video.videoHeight / video.videoWidth);
+    ctx2.drawImage(video, 0, 0, canvas.width, canvas.height);
+  }
+
+  return canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
 }
 
 async function callVision(base64Jpg) {

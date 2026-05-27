@@ -1,20 +1,13 @@
-const GOAL_PROMPT = `The camera is pointing at a Subbuteo miniature football goal from close range.
+const GOAL_PROMPT = `This image shows ONLY the inside of a Subbuteo miniature football goal net. The image has been cropped to show nothing but the net interior.
 
-Answer two separate questions:
+Your only job: is there a small round ball visible anywhere in this image?
 
-QUESTION 1 — ballSeen: Can you see the small round ball anywhere in the image at all?
-- true if the ball is visible anywhere, even in front of or beside the goal
-- false if no ball is visible
-
-QUESTION 2 — inGoal: Is the ball physically inside the goal net, behind the goal line?
-- true ONLY if the ball is sitting inside the net, clearly past the goal posts
-- false if the ball is in FRONT of the goal, even touching the posts
-- false if the ball is to the side of the goal
-- false if you can see the ball but it has not crossed the goal line
-- IMPORTANT: seeing the ball does NOT mean it is in the goal. Most of the time the ball will be visible but NOT in the goal.
+- The ball is small, round, and will appear somewhere inside the net area
+- If you can see the ball anywhere in this image, it is a goal
+- ballSeen: true = GOAL. ballSeen: false = no goal.
 
 Respond ONLY with valid JSON, no other text:
-{"ballSeen": true or false, "inGoal": true or false, "confidence": "high" or "medium" or "low", "observation": "one short sentence"}`;
+{"ballSeen": true or false, "confidence": "high" or "medium" or "low", "observation": "one short sentence"}`;
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -34,7 +27,7 @@ module.exports = async function handler(req, res) {
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 80,
+      max_tokens: 60,
       messages: [{
         role: 'user',
         content: [
