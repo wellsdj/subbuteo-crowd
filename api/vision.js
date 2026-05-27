@@ -1,10 +1,15 @@
-const GOAL_PROMPT = `This image shows ONLY the inside of a Subbuteo miniature football goal net. The image has been cropped to show nothing but the net interior.
+const GOAL_PROMPT = `This image shows ONLY the inside of a Subbuteo miniature football goal net, cropped tightly to the net interior.
 
-Your only job: is there a small round ball visible anywhere in this image?
+IMPORTANT — there will almost always be a GOALKEEPER figure visible in this image. The goalkeeper is a small plastic figure on a round flat base, attached to a long thin rod or pole that slides across the goal. This is normal. The goalkeeper is NOT the ball.
 
-- The ball is small, round, and will appear somewhere inside the net area
-- If you can see the ball anywhere in this image, it is a goal
-- ballSeen: true = GOAL. ballSeen: false = no goal.
+Your only job: is there a small round BALL visible in the net, separate from the goalkeeper figure?
+
+The BALL is:
+- Small and round, like a tiny soccer ball
+- Separate from the goalkeeper and its base
+- Sits on the felt surface or rests in the net
+
+ballSeen = true ONLY if you can see the ball itself, not just the goalkeeper figure or its base.
 
 Respond ONLY with valid JSON, no other text:
 {"ballSeen": true or false, "confidence": "high" or "medium" or "low", "observation": "one short sentence"}`;
