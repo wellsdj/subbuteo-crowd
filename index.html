@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Subbuteo Crowd</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+CiAgPGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTUiIGZpbGw9IiNmZmYiIHN0cm9rZT0iIzIyMiIgc3Ryb2tlLXdpZHRoPSIxLjUiLz4KICA8cG9seWdvbiBwb2ludHM9IjE2LDQgMjAsOSAxNiwxNCAxMiw5IiBmaWxsPSIjMjIyIi8+CiAgPHBvbHlnb24gcG9pbnRzPSIyOCwxMiAyMywxMyAyMSwxOCAyNiwyMCIgZmlsbD0iIzIyMiIvPgogIDxwb2x5Z29uIHBvaW50cz0iMjQsMjYgMjAsMjIgMjEsMTcgMjYsMTkiIGZpbGw9IiMyMjIiLz4KICA8cG9seWdvbiBwb2ludHM9IjgsMjYgMTIsMjIgMTEsMTcgNiwxOSIgZmlsbD0iIzIyMiIvPgogIDxwb2x5Z29uIHBvaW50cz0iNCwxMiA5LDEzIDExLDE4IDYsMjAiIGZpbGw9IiMyMjIiLz4KICA8cG9seWdvbiBwb2ludHM9IjE2LDI4IDEyLDIzIDE2LDE4IDIwLDIzIiBmaWxsPSIjMjIyIi8+Cjwvc3ZnPg==">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Bebas+Neue&family=Anton&family=Black+Ops+One&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -538,60 +538,244 @@
     width: 100%; height: 100%; object-fit: contain; display: none;
   }
   .hl-video.visible { display: block; }
+  /* ── Title card ── */
   .hl-title-card {
     position: absolute; inset: 0; display: none;
     flex-direction: column; align-items: center; justify-content: center;
-    gap: 16px;
-    background: linear-gradient(135deg, #cc0000 0%, #080c18 50%, #0040cc 100%);
+    gap: 14px;
+    background:
+      radial-gradient(circle at 20% 30%, rgba(255,40,40,0.55), transparent 55%),
+      radial-gradient(circle at 80% 70%, rgba(40,90,255,0.55), transparent 55%),
+      linear-gradient(135deg, #160000 0%, #050816 50%, #00081e 100%);
+    overflow: hidden;
   }
-  .hl-title-card.visible { display: flex; }
+  .hl-title-card::before {
+    content: ''; position: absolute; inset: 0;
+    background:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.04) 0 1px, transparent 1px 4px),
+      repeating-linear-gradient(45deg, rgba(255,255,255,0.02) 0 2px, transparent 2px 18px);
+    pointer-events: none;
+  }
+  .hl-title-card.visible { display: flex; animation: hlCardSweep 4s ease-out both; }
+  @keyframes hlCardSweep {
+    0% { filter: blur(20px) brightness(0.3); }
+    20% { filter: blur(0) brightness(1); }
+    100% { filter: blur(0) brightness(1); }
+  }
   .hl-title-card .hl-tag {
-    font-size: 10px; letter-spacing: 8px; color: var(--accent);
-    font-weight: 700;
+    font-family: 'Bebas Neue', 'Anton', sans-serif;
+    font-size: 18px; letter-spacing: 14px; color: #00e87a;
+    text-shadow: 0 0 18px rgba(0,232,122,0.9), 0 0 4px #fff;
+    animation: hlPulseGlow 1.4s ease-in-out infinite alternate;
+    z-index: 2;
+  }
+  @keyframes hlPulseGlow {
+    from { text-shadow: 0 0 8px rgba(0,232,122,0.6); transform: scale(1); }
+    to   { text-shadow: 0 0 30px rgba(0,232,122,1), 0 0 60px rgba(0,232,122,0.5); transform: scale(1.04); }
   }
   .hl-title-card .hl-h1 {
-    font-size: 44px; letter-spacing: 10px; color: #fff; font-weight: 700;
-    text-shadow: 0 0 20px rgba(0,232,122,0.4);
+    font-family: 'Black Ops One', 'Anton', 'Bebas Neue', sans-serif;
+    font-size: clamp(58px, 12vw, 130px); letter-spacing: 8px; color: #fff;
+    font-weight: 400; line-height: 0.9;
+    text-shadow:
+      -3px 0 0 #ff174d, 3px 0 0 #00d4ff,
+      0 0 30px rgba(255,255,255,0.6);
+    animation: hlTitleSmash 0.8s cubic-bezier(0.2, 1.6, 0.4, 1) both,
+               hlChromaShake 3s steps(1) infinite;
+    z-index: 2;
+  }
+  @keyframes hlTitleSmash {
+    0%   { transform: scale(0.2) rotate(-10deg); opacity: 0; filter: blur(40px); }
+    60%  { transform: scale(1.15) rotate(2deg); opacity: 1; filter: blur(0); }
+    100% { transform: scale(1) rotate(0); }
+  }
+  @keyframes hlChromaShake {
+    0%, 100% { text-shadow: -3px 0 0 #ff174d, 3px 0 0 #00d4ff, 0 0 30px rgba(255,255,255,0.6); }
+    50%      { text-shadow: 3px 0 0 #ff174d, -3px 0 0 #00d4ff, 0 0 50px rgba(255,255,255,0.9); }
   }
   .hl-title-card .hl-vs {
-    display: flex; align-items: center; gap: 28px; margin-top: 18px;
+    display: flex; align-items: center; gap: 32px; margin-top: 12px;
+    z-index: 2;
+  }
+  .hl-title-card .hl-vs .home,
+  .hl-title-card .hl-vs .away {
+    font-family: 'Anton', 'Bebas Neue', sans-serif;
+    font-size: clamp(28px, 5vw, 52px); font-weight: 400; letter-spacing: 6px;
+    text-transform: uppercase;
   }
   .hl-title-card .hl-vs .home {
-    color: #ff5252; font-size: 28px; font-weight: 700; letter-spacing: 4px;
+    color: #ff3355;
+    text-shadow: 0 0 24px rgba(255,51,85,0.9), 0 4px 0 rgba(0,0,0,0.5);
+    animation: hlSlideInL 0.7s cubic-bezier(0.2,1.4,0.4,1) 0.3s both;
   }
   .hl-title-card .hl-vs .away {
-    color: #4a9eff; font-size: 28px; font-weight: 700; letter-spacing: 4px;
+    color: #4a9eff;
+    text-shadow: 0 0 24px rgba(74,158,255,0.9), 0 4px 0 rgba(0,0,0,0.5);
+    animation: hlSlideInR 0.7s cubic-bezier(0.2,1.4,0.4,1) 0.3s both;
+  }
+  @keyframes hlSlideInL {
+    from { transform: translateX(-120vw) skewX(-20deg); opacity: 0; }
+    to   { transform: translateX(0) skewX(0); opacity: 1; }
+  }
+  @keyframes hlSlideInR {
+    from { transform: translateX(120vw) skewX(20deg); opacity: 0; }
+    to   { transform: translateX(0) skewX(0); opacity: 1; }
   }
   .hl-title-card .hl-vs .sep {
-    color: var(--muted); font-size: 18px; letter-spacing: 6px;
+    font-family: 'Black Ops One', sans-serif;
+    color: #ffd700; font-size: clamp(20px, 3vw, 32px); letter-spacing: 4px;
+    text-shadow: 0 0 18px rgba(255,215,0,0.8);
+    animation: hlSepSpin 0.9s cubic-bezier(0.2,1.4,0.4,1) 0.5s both;
+  }
+  @keyframes hlSepSpin {
+    from { transform: rotate(-540deg) scale(0); opacity: 0; }
+    to   { transform: rotate(0) scale(1); opacity: 1; }
   }
   .hl-title-card .hl-final-score {
-    font-size: 64px; font-weight: 700; color: #fff;
-    margin-top: 22px; letter-spacing: 8px;
-    font-family: 'Courier New', monospace;
+    font-family: 'Black Ops One', 'Anton', sans-serif;
+    font-size: clamp(70px, 14vw, 140px); font-weight: 400; color: #fff;
+    margin-top: 18px; letter-spacing: 16px;
+    text-shadow:
+      0 0 30px rgba(255,255,255,0.9),
+      0 0 80px rgba(0,232,122,0.6),
+      0 6px 0 rgba(0,0,0,0.6);
+    animation: hlScoreDrop 0.9s cubic-bezier(0.2,1.4,0.4,1) 0.8s both;
+    z-index: 2;
   }
+  @keyframes hlScoreDrop {
+    from { transform: translateY(-200%) scale(2); opacity: 0; filter: blur(20px); }
+    to   { transform: translateY(0) scale(1); opacity: 1; filter: blur(0); }
+  }
+
+  /* ── Bottom scoreboard ── */
   .hl-bottom-board {
-    position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
-    display: flex; align-items: center; gap: 10px;
-    background: rgba(0,0,0,0.82); border: 1px solid rgba(255,255,255,0.15);
-    padding: 10px 22px; border-radius: 6px;
-    font-family: 'Courier New', monospace;
-    font-size: 13px; font-weight: 700; letter-spacing: 3px;
+    position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 14px;
+    background: linear-gradient(180deg, rgba(0,0,0,0.92), rgba(20,20,30,0.92));
+    border: 2px solid rgba(255,255,255,0.18);
+    box-shadow: 0 0 24px rgba(0,0,0,0.7), inset 0 0 12px rgba(255,255,255,0.04);
+    padding: 12px 28px; border-radius: 10px;
+    font-family: 'Anton', 'Bebas Neue', sans-serif;
+    font-size: 22px; font-weight: 400; letter-spacing: 5px;
     pointer-events: none; z-index: 5; white-space: nowrap;
+    animation: hlBoardIn 0.6s cubic-bezier(0.2,1.4,0.4,1) both;
   }
-  .hl-bottom-board .hl-bb-home { color: #ff5252; }
-  .hl-bottom-board .hl-bb-away { color: #4a9eff; }
-  .hl-bottom-board .hl-bb-score { color: #fff; font-size: 22px; padding: 0 8px; }
+  @keyframes hlBoardIn {
+    from { transform: translate(-50%, 120%); opacity: 0; }
+    to   { transform: translate(-50%, 0); opacity: 1; }
+  }
+  .hl-bottom-board .hl-bb-home {
+    color: #ff3355; text-shadow: 0 0 14px rgba(255,51,85,0.7);
+  }
+  .hl-bottom-board .hl-bb-away {
+    color: #4a9eff; text-shadow: 0 0 14px rgba(74,158,255,0.7);
+  }
+  .hl-bottom-board .hl-bb-score {
+    font-family: 'Black Ops One', 'Anton', sans-serif;
+    color: #fff; font-size: 36px; padding: 0 10px; letter-spacing: 2px;
+    text-shadow: 0 0 16px rgba(255,255,255,0.6);
+    display: inline-block;
+  }
+  .hl-bottom-board .hl-bb-score.bump {
+    animation: hlScoreBump 0.6s cubic-bezier(0.2,1.6,0.4,1);
+  }
+  @keyframes hlScoreBump {
+    0%   { transform: scale(1); color: #fff; }
+    30%  { transform: scale(1.8); color: #ffd700; text-shadow: 0 0 40px #ffd700; }
+    100% { transform: scale(1); color: #fff; }
+  }
+
+  /* ── GOAL! flash ── */
   .hl-goal-flash {
     position: absolute; inset: 0;
     display: flex; align-items: center; justify-content: center;
-    font-family: 'Courier New', monospace;
-    font-size: clamp(52px, 14vw, 100px); font-weight: 700;
-    letter-spacing: 10px; text-transform: uppercase;
+    font-family: 'Black Ops One', 'Anton', 'Bebas Neue', sans-serif;
+    font-size: clamp(80px, 22vw, 220px); font-weight: 400;
+    letter-spacing: 14px; text-transform: uppercase;
     opacity: 0; pointer-events: none; z-index: 6;
-    transition: opacity 0.3s ease;
+    overflow: hidden;
   }
-  .hl-goal-flash.visible { opacity: 1; }
+  .hl-goal-flash::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(circle at center, currentColor 0%, transparent 60%);
+    opacity: 0.2; mix-blend-mode: screen;
+    animation: hlFlashPulse 0.4s ease-in-out infinite alternate;
+  }
+  @keyframes hlFlashPulse {
+    from { opacity: 0.15; transform: scale(1); }
+    to   { opacity: 0.4; transform: scale(1.4); }
+  }
+  .hl-goal-flash .hl-goal-text {
+    position: relative; display: inline-block;
+    text-shadow:
+      0 0 30px currentColor,
+      0 0 60px currentColor,
+      0 6px 0 rgba(0,0,0,0.7),
+      0 12px 30px rgba(0,0,0,0.6);
+    -webkit-text-stroke: 2px rgba(0,0,0,0.5);
+  }
+  .hl-goal-flash.visible {
+    opacity: 1;
+    animation: hlGoalIn 0.6s cubic-bezier(0.2,1.8,0.3,1) both;
+  }
+  .hl-goal-flash.visible .hl-goal-text {
+    animation:
+      hlGoalSmash 0.6s cubic-bezier(0.2,1.8,0.3,1) both,
+      hlGoalShake 0.12s steps(1) infinite 0.6s,
+      hlGoalChroma 0.25s steps(1) infinite 0.6s;
+  }
+  @keyframes hlGoalIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes hlGoalSmash {
+    0%   { transform: scale(0.1) rotate(-15deg); filter: blur(30px); }
+    50%  { transform: scale(1.3) rotate(4deg); filter: blur(0); }
+    75%  { transform: scale(0.95) rotate(-2deg); }
+    100% { transform: scale(1.05) rotate(0); }
+  }
+  @keyframes hlGoalShake {
+    0%   { transform: translate(0,0) scale(1.05); }
+    20%  { transform: translate(-6px, 4px) scale(1.07); }
+    40%  { transform: translate(7px, -3px) scale(1.04); }
+    60%  { transform: translate(-4px, -5px) scale(1.06); }
+    80%  { transform: translate(5px, 3px) scale(1.05); }
+    100% { transform: translate(0,0) scale(1.05); }
+  }
+  @keyframes hlGoalChroma {
+    0%   { text-shadow: 0 0 30px currentColor, 0 0 60px currentColor, -4px 0 0 #ff174d, 4px 0 0 #00d4ff, 0 6px 0 rgba(0,0,0,0.7); }
+    50%  { text-shadow: 0 0 50px currentColor, 0 0 100px currentColor, 4px 0 0 #ff174d, -4px 0 0 #00d4ff, 0 6px 0 rgba(0,0,0,0.7); }
+    100% { text-shadow: 0 0 30px currentColor, 0 0 60px currentColor, -4px 0 0 #ff174d, 4px 0 0 #00d4ff, 0 6px 0 rgba(0,0,0,0.7); }
+  }
+  /* Burst rays around GOAL! */
+  .hl-goal-rays {
+    position: absolute; inset: 0; pointer-events: none;
+    background:
+      conic-gradient(from 0deg,
+        transparent 0deg, currentColor 4deg, transparent 8deg,
+        transparent 30deg, currentColor 34deg, transparent 38deg,
+        transparent 60deg, currentColor 64deg, transparent 68deg,
+        transparent 90deg, currentColor 94deg, transparent 98deg,
+        transparent 120deg, currentColor 124deg, transparent 128deg,
+        transparent 150deg, currentColor 154deg, transparent 158deg,
+        transparent 180deg, currentColor 184deg, transparent 188deg,
+        transparent 210deg, currentColor 214deg, transparent 218deg,
+        transparent 240deg, currentColor 244deg, transparent 248deg,
+        transparent 270deg, currentColor 274deg, transparent 278deg,
+        transparent 300deg, currentColor 304deg, transparent 308deg,
+        transparent 330deg, currentColor 334deg, transparent 338deg,
+        transparent 360deg);
+    opacity: 0; mix-blend-mode: screen;
+    transform-origin: center;
+  }
+  .hl-goal-flash.visible .hl-goal-rays {
+    animation: hlRays 1.6s linear both;
+  }
+  @keyframes hlRays {
+    0%   { opacity: 0; transform: scale(0.2) rotate(0deg); }
+    20%  { opacity: 0.7; transform: scale(1) rotate(60deg); }
+    100% { opacity: 0; transform: scale(2.5) rotate(360deg); }
+  }
   .hl-controls {
     width: 100%; padding: 14px 24px;
     display: flex; gap: 12px; align-items: center;
@@ -1521,17 +1705,23 @@ function playNextHighlight() {
         // Flash "GOAL!" in team color, then increment scoreboard, then slo-mo
         const flash = document.getElementById('hlGoalFlash');
         const isHome = entry.team === 'home';
-        flash.textContent = 'GOAL!';
-        flash.style.color = isHome ? '#ff5252' : '#4a9eff';
-        flash.style.textShadow = '0 0 60px ' + (isHome ? '#ff5252' : '#4a9eff');
+        flash.style.color = isHome ? '#ff3355' : '#4a9eff';
+        document.getElementById('hlGoalText').textContent = 'GOAL!';
+        // Force re-trigger of CSS animation by removing then adding next frame
+        flash.classList.remove('visible');
+        // eslint-disable-next-line no-unused-expressions
+        void flash.offsetWidth;
         flash.classList.add('visible');
         playHlGoalSound();
         setTimeout(() => {
           if (!hlPlaying) return;
-          // Increment scoreboard
+          // Increment scoreboard with bump animation
           if (isHome) hlCumHome++; else hlCumAway++;
-          document.getElementById('hlBoardHome').textContent = hlCumHome;
-          document.getElementById('hlBoardAway').textContent = hlCumAway;
+          const scoreEl = document.getElementById(isHome ? 'hlBoardHome' : 'hlBoardAway');
+          scoreEl.textContent = isHome ? hlCumHome : hlCumAway;
+          scoreEl.classList.remove('bump');
+          void scoreEl.offsetWidth;
+          scoreEl.classList.add('bump');
           flash.classList.remove('visible');
           setTimeout(() => {
             if (!hlPlaying) return;
@@ -2149,7 +2339,10 @@ function updateReplaySectionUI() {
       <span class="hl-bb-score" id="hlBoardAway">0</span>
       <span class="hl-bb-away">PETERBOROUGH</span>
     </div>
-    <div class="hl-goal-flash" id="hlGoalFlash"></div>
+    <div class="hl-goal-flash" id="hlGoalFlash">
+      <div class="hl-goal-rays"></div>
+      <span class="hl-goal-text" id="hlGoalText">GOAL!</span>
+    </div>
     <div class="hl-empty" id="hlEmpty" style="display:none">
       NO HIGHLIGHTS YET — SCORE A GOAL OR TRIGGER A SAVE / NEAR MISS WHILE RECORDING
     </div>
