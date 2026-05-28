@@ -898,6 +898,7 @@ function triggerReaction(type, btn) {
   if (!ctx) return;
   reactions[type]?.();
   if (btn) addRipple(btn);
+  if (type === 'save' || type === 'nearmiss') showSaveReplay();
 }
 
 
@@ -991,18 +992,32 @@ const REPLAY_SEQ = [
   { label: 'SUPER SLOW',  rate: 0.25, seekFromEnd: 3,    skipStart: 1 },
 ];
 
+const SAVE_REPLAY_SEQ = [
+  { label: 'REPLAY',      rate: 1.0,  seekFromEnd: 5, skipStart: 1 },
+  { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5, skipStart: 1 },
+];
+
+let activeReplaySeq = REPLAY_SEQ;
+
 function updateReplayUI(idx) {
-  document.getElementById('replayLabel').textContent = REPLAY_SEQ[idx].label;
+  const seq = activeReplaySeq;
+  document.getElementById('replayLabel').textContent = seq[idx].label;
+  const rateLabels = { 1.0: '1×', 0.5: '0.5×', 0.25: '0.25×' };
+  const secs = seq[idx].seekFromEnd ? seq[idx].seekFromEnd - (seq[idx].skipStart || 0) - 1 : '—';
   document.getElementById('replayTimestamp').textContent =
-    ['10s · 1×', '5s · 1×', '5s · 0.5×', '3s · 0.25×'][idx];
-  REPLAY_SEQ.forEach((_, i) =>
-    document.getElementById('rsp' + i).classList.toggle('active', i === idx));
+    (seq[idx].seekFromEnd ? secs + 's' : 'full') + ' · ' + (rateLabels[seq[idx].rate] || seq[idx].rate + '×');
+  // Show only as many pips as the active sequence has
+  for (let i = 0; i < 4; i++) {
+    const pip = document.getElementById('rsp' + i);
+    pip.style.display = i < seq.length ? '' : 'none';
+    pip.classList.toggle('active', i === idx);
+  }
 }
 
 function playReplayClip() {
   const video = document.getElementById('replayVideo');
-  const idx = replaySeqIdx % REPLAY_SEQ.length;
-  const clip = REPLAY_SEQ[idx];
+  const idx = replaySeqIdx % activeReplaySeq.length;
+  const clip = activeReplaySeq[idx];
   updateReplayUI(idx);
   video.muted = true;
   video.ontimeupdate = null;
@@ -1045,10 +1060,18 @@ function startReplaySequence() {
 }
 
 function showGoalPopup() {
+  activeReplaySeq = REPLAY_SEQ;
   if (replaySectionActive || replayChunks.length > 0) {
-    captureReplay();
+    captureReplay(true); // true = show goal popup + 10s delay
   } else {
     document.getElementById('goalPopup').classList.add('visible');
+  }
+}
+
+function showSaveReplay() {
+  activeReplaySeq = SAVE_REPLAY_SEQ;
+  if (replaySectionActive || replayChunks.length > 0) {
+    captureReplay(false); // no goal popup, replay appears immediately
   }
 }
 function dismissGoal() {
@@ -1300,19 +1323,17 @@ function stopReplayRecorder() {
   replayCurrChunks = [];
 }
 
-function captureReplay() {
+function captureReplay(showGoalFirst) {
   if (replaySegmentTimer) { clearTimeout(replaySegmentTimer); replaySegmentTimer = null; }
 
   const handleBlob = (currBlob) => {
-    // Pick the longest available blob. The current segment may be very short
-    // (just started); fall back to the previous complete segment if so.
     let chosen = null;
-    if (currBlob && currBlob.size > 200000) chosen = currBlob;       // > ~2s of footage
+    if (currBlob && currBlob.size > 200000) chosen = currBlob;
     else if (replayPrevBlob) chosen = replayPrevBlob;
     else if (currBlob) chosen = currBlob;
 
     if (!chosen) {
-      document.getElementById('goalPopup').classList.add('visible');
+      if (showGoalFirst) document.getElementById('goalPopup').classList.add('visible');
       if (replaySectionStream && replaySectionActive) startReplaySegment(replaySectionStream);
       return;
     }
@@ -1320,14 +1341,21 @@ function captureReplay() {
     if (replayUrl) URL.revokeObjectURL(replayUrl);
     replayUrl = URL.createObjectURL(chosen);
 
-    document.getElementById('goalPopup').classList.add('visible');
-    replayTimerHandle = setTimeout(() => {
-      replayTimerHandle = null;
-      document.getElementById('goalPopup').classList.remove('visible');
-      startReplaySequence();
-    }, 10000);
+    if (showGoalFirst) {
+      document.getElementById('goalPopup').classList.add('visible');
+      replayTimerHandle = setTimeout(() => {
+        replayTimerHandle = null;
+        document.getElementById('goalPopup').classList.remove('visible');
+        startReplaySequence();
+      }, 10000);
+    } else {
+      // Save/nearmiss: show replay immediately after a short 5s pause
+      replayTimerHandle = setTimeout(() => {
+        replayTimerHandle = null;
+        startReplaySequence();
+      }, 5000);
+    }
 
-    // Start a fresh segment so the next goal has footage
     if (replaySectionStream && replaySectionActive) startReplaySegment(replaySectionStream);
   };
 
