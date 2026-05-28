@@ -100,6 +100,48 @@
   .goal-title { font-size: 26px; font-weight: 700; letter-spacing: 4px; color: var(--red); }
   .goal-sub { font-size: 13px; color: var(--muted); }
 
+  /* ── Replay popup ── */
+  .replay-popup {
+    position: fixed; inset: 0; z-index: 850;
+    background: rgba(0,0,0,0.92);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 16px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  .replay-popup.visible { opacity: 1; pointer-events: all; }
+  .replay-header {
+    display: flex; align-items: center; gap: 14px;
+  }
+  .replay-badge {
+    font-size: 10px; font-weight: 700; letter-spacing: 4px;
+    color: var(--red); border: 1px solid var(--red);
+    padding: 4px 10px; border-radius: 2px;
+    animation: blink 0.8s infinite;
+  }
+  .replay-title {
+    font-size: 28px; font-weight: 700; letter-spacing: 6px; color: #fff;
+  }
+  .replay-video-wrap {
+    position: relative; width: 90vw; max-width: 700px;
+    border: 1px solid rgba(255,60,60,0.3);
+    border-radius: 4px; overflow: hidden;
+    background: #000;
+  }
+  .replay-video-wrap video {
+    width: 100%; display: block;
+  }
+  .replay-timestamp {
+    font-size: 10px; letter-spacing: 3px; color: var(--muted);
+  }
+  .replay-dismiss {
+    border: 1px solid rgba(255,255,255,0.2); background: transparent;
+    color: var(--muted); font-size: 10px; letter-spacing: 3px;
+    padding: 10px 28px; border-radius: 2px; cursor: pointer;
+    transition: all 0.2s; text-transform: uppercase;
+  }
+  .replay-dismiss:hover { border-color: var(--accent); color: var(--accent); }
+
   /* ── Flash overlay ── */
   .flash { position: fixed; inset: 0; z-index: 700; pointer-events: none; opacity: 0; transition: opacity 0.08s; background: var(--red); }
 
@@ -531,6 +573,20 @@
     </div>
   </div>
 
+
+<!-- ── Replay popup ── -->
+<div class="replay-popup" id="replayPopup">
+  <div class="replay-header">
+    <div class="replay-badge">● REC REPLAY</div>
+    <div class="replay-title">INSTANT REPLAY</div>
+  </div>
+  <div class="replay-video-wrap">
+    <video id="replayVideo" autoplay loop playsinline muted></video>
+  </div>
+  <div class="replay-timestamp" id="replayTimestamp">Last 10 seconds before goal</div>
+  <button class="replay-dismiss" onclick="dismissReplay()">CLOSE REPLAY</button>
+</div>
+
   <!-- two input panels -->
   <div class="panels-row">
 
@@ -831,9 +887,25 @@ async function checkPassword(e) {
 
 // ── Goal popup ──
 function showGoalPopup() {
+  if (gestureStream || replayChunks.length > 0) {
+    captureReplay();
+  } else {
+    document.getElementById('goalPopup').classList.add('visible');
+  }
+}
   document.getElementById('goalPopup').classList.add('visible');
 }
 function dismissGoal() {
+  document.getElementById('goalPopup').classList.remove('visible');
+}
+function dismissReplay() {
+  const popup = document.getElementById('replayPopup');
+  popup.classList.remove('visible');
+  const v = document.getElementById('replayVideo');
+  v.pause(); v.src = '';
+  // Now show the goal popup
+  document.getElementById('goalPopup').classList.add('visible');
+}
   document.getElementById('goalPopup').classList.remove('visible');
 }
 
@@ -968,15 +1040,90 @@ async function startGesture() {
   video.srcObject = gestureStream;
   await new Promise(r => { video.onloadedmetadata = r; });
   video.play();
+  startReplayRecorder(gestureStream);
   document.getElementById('gestureVideo').classList.add('visible');
   gestureActive = true;
   updateHandUI();
   runGestureLoop();
 }
 
+
+// ── Replay ring buffer ──
+let replayRecorder = null;
+let replayChunks = [];
+let replayInitChunk = null;
+const REPLAY_DURATION_MS = 12000; // 12s buffer, show last 10s
+const REPLAY_CHUNK_MS = 500;
+
+function startReplayRecorder(stream) {
+  replayChunks = [];
+  replayInitChunk = null;
+  const mimeType = ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm','video/mp4']
+    .find(m => MediaRecorder.isTypeSupported(m)) || '';
+  try {
+    replayRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+    replayRecorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) {
+        if (!replayInitChunk) replayInitChunk = e.data;
+        replayChunks.push({ data: e.data, ts: Date.now() });
+        // Keep only last REPLAY_DURATION_MS worth of chunks
+        const cutoff = Date.now() - REPLAY_DURATION_MS;
+        while (replayChunks.length > 1 && replayChunks[0].ts < cutoff) replayChunks.shift();
+      }
+    };
+    replayRecorder.start(REPLAY_CHUNK_MS);
+  } catch(e) { replayRecorder = null; }
+}
+
+function stopReplayRecorder() {
+  if (replayRecorder && replayRecorder.state !== 'inactive') {
+    replayRecorder.stop();
+    replayRecorder = null;
+  }
+}
+
+function captureReplay() {
+  // Pause adding to buffer
+  stopReplayRecorder();
+
+  const chunks = replayChunks.map(c => c.data);
+  if (chunks.length < 2) {
+    // Not enough footage — just show goal popup
+    document.getElementById('goalPopup').classList.add('visible');
+    return;
+  }
+
+  // Prepend init chunk if it's not already first
+  const allChunks = (replayInitChunk && replayChunks[0].data !== replayInitChunk)
+    ? [replayInitChunk, ...chunks]
+    : chunks;
+
+  const mimeType = replayChunks.length > 0
+    ? (replayRecorder?._mimeType || 'video/webm')
+    : 'video/webm';
+
+  const blob = new Blob(allChunks, { type: 'video/webm' });
+  const url = URL.createObjectURL(blob);
+
+  const video = document.getElementById('replayVideo');
+  video.src = url;
+  video.muted = false;
+  video.volume = 0;
+  video.play().catch(() => {});
+
+  const secs = Math.round(replayChunks.length * REPLAY_CHUNK_MS / 1000);
+  document.getElementById('replayTimestamp').textContent =
+    'Last ~' + Math.min(secs, 10) + ' seconds before goal';
+
+  document.getElementById('replayPopup').classList.add('visible');
+  replayChunks = [];
+  replayInitChunk = null;
+}
+
 function stopGesture() {
   gestureActive = false;
   cancelAnimationFrame(gestureAnimFrame);
+  stopReplayRecorder();
   if (gestureStream) { gestureStream.getTracks().forEach(t => t.stop()); gestureStream = null; }
   document.getElementById('gestureVideo').classList.remove('visible');
   document.getElementById('gestureTag').textContent = '';
