@@ -570,11 +570,6 @@
     margin-top: 22px; letter-spacing: 8px;
     font-family: 'Courier New', monospace;
   }
-  .hl-overlay {
-    position: absolute; top: 14px; right: 14px;
-    display: flex; justify-content: flex-end; align-items: center;
-    pointer-events: none; z-index: 5;
-  }
   .hl-bottom-board {
     position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
     display: flex; align-items: center; gap: 10px;
@@ -597,15 +592,6 @@
     transition: opacity 0.3s ease;
   }
   .hl-goal-flash.visible { opacity: 1; }
-  .hl-overlay-tag {
-    font-size: 10px; letter-spacing: 4px; padding: 6px 14px;
-    border-radius: 2px; font-weight: 700;
-    animation: blink 0.8s infinite;
-  }
-  .hl-overlay-tag.goal { background: #cc0000; color: #fff; }
-  .hl-overlay-tag.save { background: #00e87a; color: #000; }
-  .hl-overlay-tag.nearmiss { background: #ffaa00; color: #000; }
-  .hl-overlay-tag.slomo { background: rgba(0,0,0,0.7); color: #fff; border: 1px solid rgba(255,255,255,0.3); animation: none; }
   .hl-controls {
     width: 100%; padding: 14px 24px;
     display: flex; gap: 12px; align-items: center;
@@ -1398,6 +1384,19 @@ function stopHlAudio() {
   if (masterGain) masterGain.gain.setTargetAtTime(0.75, ctx.currentTime, 0.4);
 }
 
+async function playHlReactionSound() {
+  if (!ctx) return;
+  const buf = await loadNearMissBuffer();
+  if (!hlPlaying) return;
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const g = ctx.createGain();
+  g.gain.value = 1.8;
+  src.connect(g);
+  g.connect(ctx.destination);
+  src.start();
+}
+
 async function playHlGoalSound() {
   if (!ctx) return;
   const buf = await loadGoalBuffer();
@@ -1461,7 +1460,6 @@ function showTitleCard() {
   document.getElementById('hlTitleCard').classList.add('visible');
   const v = document.getElementById('hlVideo');
   v.pause(); v.src = ''; v.classList.remove('visible');
-  document.getElementById('hlOverlay').style.display = 'none';
   document.getElementById('hlBottomBoard').style.display = 'none';
   document.getElementById('hlGoalFlash').classList.remove('visible');
 }
@@ -1480,8 +1478,6 @@ function stopHighlights() {
   if (stopBtn) stopBtn.style.display = 'none';
   const tc = document.getElementById('hlTitleCard');
   if (tc) tc.classList.remove('visible');
-  const ov = document.getElementById('hlOverlay');
-  if (ov) ov.style.display = 'none';
   const bb = document.getElementById('hlBottomBoard');
   if (bb) bb.style.display = 'none';
   const gf = document.getElementById('hlGoalFlash');
@@ -1497,14 +1493,6 @@ function playNextHighlight() {
     return;
   }
   const entry = hlEntries[hlIdx];
-
-  // Show event tag (top-right)
-  const tag = document.getElementById('hlOvTag');
-  tag.classList.remove('goal','save','nearmiss','slomo');
-  tag.classList.add(entry.type);
-  tag.textContent = entry.type === 'goal' ? 'GOAL'
-                  : entry.type === 'save' ? 'GREAT SAVE' : 'NEAR MISS';
-  document.getElementById('hlOverlay').style.display = '';
 
   // Show bottom scoreboard (current score before this clip)
   document.getElementById('hlBoardHome').textContent = hlCumHome;
@@ -1551,6 +1539,7 @@ function playNextHighlight() {
           }, 300);
         }, 2000);
       } else {
+        playHlReactionSound();
         startSloMo(v);
       }
     } else {
@@ -1564,10 +1553,6 @@ function playNextHighlight() {
 
 function startSloMo(v) {
   hlStage = 'slomo';
-  const slomoTag = document.getElementById('hlOvTag');
-  slomoTag.classList.remove('goal','save','nearmiss');
-  slomoTag.classList.add('slomo');
-  slomoTag.textContent = 'SLOW MOTION';
   v.playbackRate = 0.5;
   if (isFinite(v.duration)) v.currentTime = Math.max(0, v.duration - 5);
   else v.currentTime = 0;
@@ -2156,9 +2141,6 @@ function updateReplaySectionUI() {
         <span class="away">PETERBOROUGH</span>
       </div>
       <div class="hl-final-score" id="hlFinalScore" style="display:none">0 — 0</div>
-    </div>
-    <div class="hl-overlay" id="hlOverlay" style="display:none">
-      <div class="hl-overlay-tag" id="hlOvTag">GOAL</div>
     </div>
     <div class="hl-bottom-board" id="hlBottomBoard" style="display:none">
       <span class="hl-bb-home">FLANDERS</span>
