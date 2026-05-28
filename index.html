@@ -1005,10 +1005,25 @@ function playReplayClip() {
   const clip = REPLAY_SEQ[idx];
   updateReplayUI(idx);
   video.muted = true;
-  video.playbackRate = clip.rate;
-  video.onended = () => { replaySeqIdx++; playReplayClip(); };
+  video.ontimeupdate = null;
+  video.onended = null;
 
-  const go = () => video.play().catch(() => {});
+  const advance = () => {
+    video.ontimeupdate = null;
+    video.onended = null;
+    video.pause();
+    replaySeqIdx++;
+    playReplayClip();
+  };
+
+  const go = () => {
+    video.playbackRate = clip.rate;
+    video.play().catch(() => {});
+    video.ontimeupdate = () => {
+      if (isFinite(video.duration) && video.currentTime >= video.duration - 1) advance();
+    };
+    video.onended = advance; // fallback if duration is Infinity
+  };
 
   if (clip.seekFromEnd && isFinite(video.duration)) {
     video.currentTime = Math.max(0, video.duration - clip.seekFromEnd);
