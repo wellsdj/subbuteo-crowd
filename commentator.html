@@ -764,7 +764,7 @@ function idleBars(waveId) {
 async function generateScript(home, away) {
   const matchCtx = getMatchContext();
   const prompt =
-    'MATCH CONTEXT: ' + matchCtx + ' You are writing a live TV broadcast script for a real professional football match between ' + home + ' and ' + away + '.\n\n' +
+    'MATCH CONTEXT: ' + matchCtx + '\n\nCRITICAL: You MUST stay strictly within this match context. Do NOT invent events that have not happened, do NOT advance the match phase, do NOT reference goals or scores unless they are in the context above.\n\nYou are writing a live TV broadcast script for a real professional football match between ' + home + ' and ' + away + '.\n\n' +
     'Write exactly 12 lines of dialogue alternating between two commentators: Jeff and John.\n' +
     'Jeff is the lead presenter — authoritative, sets the scene, reads from stats, sounds like Sky Sports.\n' +
     'John is the co-commentator — former player, adds tactical insight, banter, opinions, occasionally funny.\n\n' +
@@ -956,7 +956,7 @@ async function doWeAreBack() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 120,
-        messages: [{ role: 'user', content: 'You are ' + speaker + ', a live TV football commentator returning from an advert break. The match is ' + homeTeam + ' vs ' + awayTeam + ' at Flanders Stadium. One energetic we-are-back sentence, no quotes, no preamble.' }]
+        messages: [{ role: 'user', content: 'MATCH CONTEXT: ' + getMatchContext() + '\n\nYou are ' + speaker + ', a live TV football commentator returning from an advert break. The match is ' + homeTeam + ' vs ' + awayTeam + ' at Flanders Stadium. Based on the match context above, write one energetic we-are-back sentence that is accurate to the current match phase. No quotes, no preamble.' }]
       })
     });
     if (res.ok) { const d = await res.json(); line = d.content[0].text.trim().replace(/^["']|["']$/g, ''); }
@@ -1080,6 +1080,7 @@ async function doKickoff() {
   document.getElementById('stopBtn').classList.add('hidden');
 
   const prompt =
+    'MATCH CONTEXT: ' + getMatchContext() + '\n\n' +
     'You are writing the final kick-off moment for a live TV football pre-match show. Match: ' + homeTeam + ' vs ' + awayTeam + ' at Flanders Stadium.\n\n' +
     'Write exactly 4 lines alternating Jeff then John:\n' +
     '- Lines 1-3: build tension, predictions, atmosphere\n' +
