@@ -980,17 +980,15 @@ async function checkPassword(e) {
 }
 
 // ── Replay sequence engine ──
-// MediaRecorder WebM files have duration=Infinity so seeking is broken.
-// Fix: build separate blobs for each time window so each clip plays from its own start.
-let replayUrls = {};   // { 10: objectURL, 5: objectURL, 3: objectURL }
+let replayUrl = null;
 let replaySeqIdx = 0;
 let replayTimerHandle = null;
 
 const REPLAY_SEQ = [
-  { label: 'FULL REPLAY',  urlKey: 10, rate: 1.0  },
-  { label: 'LAST 5s',      urlKey: 5,  rate: 1.0  },
-  { label: 'SLOW MOTION',  urlKey: 5,  rate: 0.5  },
-  { label: 'SUPER SLOW',   urlKey: 3,  rate: 0.25 },
+  { label: 'FULL REPLAY', rate: 1.0,  seekFromEnd: null },
+  { label: 'LAST 5s',     rate: 1.0,  seekFromEnd: 5    },
+  { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5    },
+  { label: 'SUPER SLOW',  rate: 0.25, seekFromEnd: 3    },
 ];
 
 function updateReplayUI(idx) {
@@ -1005,29 +1003,30 @@ function playReplayClip() {
   const video = document.getElementById('replayVideo');
   const idx = replaySeqIdx % REPLAY_SEQ.length;
   const clip = REPLAY_SEQ[idx];
-  const url = replayUrls[clip.urlKey];
   updateReplayUI(idx);
+  video.muted = true;
+  video.playbackRate = clip.rate;
   video.onended = () => { replaySeqIdx++; playReplayClip(); };
-  if (video.getAttribute('data-url') !== url) {
-    video.setAttribute('data-url', url);
-    video.src = url;
-    video.oncanplay = () => {
-      video.oncanplay = null;
-      video.playbackRate = clip.rate;
-      video.play().catch(() => {});
-    };
-    video.load();
+
+  const go = () => video.play().catch(() => {});
+
+  if (clip.seekFromEnd && isFinite(video.duration)) {
+    video.currentTime = Math.max(0, video.duration - clip.seekFromEnd);
+    video.onseeked = () => { video.onseeked = null; go(); };
   } else {
     video.currentTime = 0;
-    video.playbackRate = clip.rate;
-    video.play().catch(() => {});
+    go();
   }
 }
 
 function startReplaySequence() {
   replaySeqIdx = 0;
   document.getElementById('replayPopup').classList.add('visible');
-  playReplayClip();
+  const video = document.getElementById('replayVideo');
+  video.muted = true;
+  video.src = replayUrl;
+  video.oncanplay = () => { video.oncanplay = null; playReplayClip(); };
+  video.load();
 }
 
 function showGoalPopup() {
@@ -1042,8 +1041,7 @@ function dismissGoal() {
   if (replayTimerHandle) {
     clearTimeout(replayTimerHandle);
     replayTimerHandle = null;
-    Object.values(replayUrls).forEach(u => URL.revokeObjectURL(u));
-    replayUrls = {};
+    if (replayUrl) { URL.revokeObjectURL(replayUrl); replayUrl = null; }
   }
   document.getElementById('scorePrompt').classList.add('visible');
 }
@@ -1054,9 +1052,8 @@ function addToScoreboard(team) {
 function dismissReplay() {
   document.getElementById('replayPopup').classList.remove('visible');
   const v = document.getElementById('replayVideo');
-  v.pause(); v.onended = null; v.oncanplay = null; v.src = ''; v.removeAttribute('data-url');
-  Object.values(replayUrls).forEach(u => URL.revokeObjectURL(u));
-  replayUrls = {};
+  v.pause(); v.onended = null; v.oncanplay = null; v.onseeked = null; v.src = '';
+  if (replayUrl) { URL.revokeObjectURL(replayUrl); replayUrl = null; }
   document.getElementById('scorePrompt').classList.add('visible');
 }
 
@@ -1252,30 +1249,23 @@ function stopReplayRecorder() {
 function captureReplay() {
   stopReplayRecorder();
 
-  const chunks = replayChunks.slice(); // copy before clearing
-  replayChunks = [];
+  const chunkData = replayChunks.map(c => c.data);
   const init = replayInitChunk;
+  replayChunks = [];
   replayInitChunk = null;
 
-  if (chunks.length < 2) {
+  if (chunkData.length < 2) {
     document.getElementById('goalPopup').classList.add('visible');
     if (replaySectionStream) startReplayRecorder(replaySectionStream);
     return;
   }
 
-  // Build a blob for a given time window (from the tail of chunks).
-  // Always prepend the init chunk so the codec header is present.
-  function makeUrl(secWindow) {
-    const count = Math.ceil(secWindow / (REPLAY_CHUNK_MS / 1000));
-    const subset = chunks.slice(-count).map(c => c.data);
-    const parts = (init && subset[0] !== init.data) ? [init, ...subset] : subset;
-    return URL.createObjectURL(new Blob(parts, { type: 'video/webm' }));
-  }
+  // Build one clean blob: prepend init chunk only if it isn't already the first chunk
+  const parts = (init && chunkData[0] !== init) ? [init, ...chunkData] : chunkData;
+  if (replayUrl) URL.revokeObjectURL(replayUrl);
+  replayUrl = URL.createObjectURL(new Blob(parts, { type: 'video/webm' }));
 
-  Object.values(replayUrls).forEach(u => URL.revokeObjectURL(u));
-  replayUrls = { 10: makeUrl(10), 5: makeUrl(5), 3: makeUrl(3) };
-
-  // Show goal popup for 10s, then auto-transition to replay
+  // Goal popup for 10s, then auto-show replay
   document.getElementById('goalPopup').classList.add('visible');
   replayTimerHandle = setTimeout(() => {
     replayTimerHandle = null;
@@ -1283,7 +1273,7 @@ function captureReplay() {
     startReplaySequence();
   }, 10000);
 
-  // Restart recording so next goal has footage too
+  // Restart recording so next goal has footage
   if (replaySectionStream) startReplayRecorder(replaySectionStream);
 }
 
