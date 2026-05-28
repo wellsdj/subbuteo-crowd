@@ -119,6 +119,7 @@
   .app {
     width: 100%; max-width: 100%;
     min-height: 100vh;
+    transition: opacity 0.2s;
     display: flex; flex-direction: column;
     position: relative; overflow: hidden;
     background: linear-gradient(rgba(8,12,24,0.82), rgba(8,12,24,0.82)), url('/stadium.jpg') center/cover no-repeat;
@@ -330,7 +331,9 @@
     padding: 13px 20px; text-decoration: none;
     color: var(--muted); font-size: 11px; font-weight: 600;
     letter-spacing: 3px; text-transform: uppercase;
-    border-left: 2px solid transparent;
+    border-left: 2px solid transparent; border-right: none;
+    border-top: none; border-bottom: none;
+    background: none; width: 100%;
     transition: all 0.18s;
     cursor: pointer;
   }
@@ -895,6 +898,13 @@ function updateHandUI() {
 
 </script>
 
+<!-- ── Commentator iframe (always loaded, audio keeps playing when hidden) ── -->
+<iframe id="commFrame" src="commentator.html" style="
+  position:fixed; inset:0; width:100%; height:100%; border:none;
+  z-index:0; pointer-events:none; opacity:0;
+  transition:opacity 0.2s;
+"></iframe>
+
 <!-- ── Navigation Sidebar ── -->
 <div class="nav-overlay" id="navOverlay" onclick="closeNav()"></div>
 <nav class="nav-sidebar" id="navSidebar">
@@ -903,19 +913,60 @@ function updateHandUI() {
     <button class="nav-close" onclick="closeNav()">✕</button>
   </div>
   <div class="nav-section-label">Modules</div>
-  <a class="nav-item active" href="/index.html">
+  <button class="nav-item active" id="navCrowd" onclick="showSection('crowd')">
     <span class="nav-item-icon">🔊</span>
     CROWD SYS
-    <span class="nav-item-dot"></span>
-  </a>
-  <a class="nav-item" href="/commentator.html">
+    <span class="nav-item-dot" id="crowdDot"></span>
+  </button>
+  <button class="nav-item" id="navComm" onclick="showSection('comm')">
     <span class="nav-item-icon">🎙</span>
     COMMENTARY
-  </a>
+    <span class="nav-item-dot" id="commDot" style="display:none"></span>
+  </button>
   <div class="nav-footer">SUBBUTEO LIVE SYSTEM</div>
 </nav>
 
 <script>
+let currentSection = 'crowd';
+
+function showSection(section) {
+  const app = document.querySelector('.app');
+  const frame = document.getElementById('commFrame');
+  const navCrowd = document.getElementById('navCrowd');
+  const navComm = document.getElementById('navComm');
+  const crowdDot = document.getElementById('crowdDot');
+  const commDot = document.getElementById('commDot');
+
+  currentSection = section;
+
+  if (section === 'crowd') {
+    // Bring crowd app forward, keep iframe running in background
+    app.style.opacity = '1';
+    app.style.pointerEvents = 'all';
+    app.style.zIndex = '5';
+    frame.style.opacity = '0';
+    frame.style.pointerEvents = 'none';
+    frame.style.zIndex = '0';
+    navCrowd.classList.add('active');
+    navComm.classList.remove('active');
+    crowdDot.style.display = '';
+    commDot.style.display = 'none';
+  } else {
+    // Bring commentator iframe forward, crowd keeps playing in background
+    app.style.opacity = '0';
+    app.style.pointerEvents = 'none';
+    app.style.zIndex = '0';
+    frame.style.opacity = '1';
+    frame.style.pointerEvents = 'all';
+    frame.style.zIndex = '5';
+    navCrowd.classList.remove('active');
+    navComm.classList.add('active');
+    crowdDot.style.display = 'none';
+    commDot.style.display = '';
+  }
+  closeNav();
+}
+
 function openNav() {
   document.getElementById('navSidebar').classList.add('open');
   document.getElementById('navOverlay').classList.add('open');

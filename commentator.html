@@ -1181,19 +1181,27 @@ document.getElementById('goalBtn').addEventListener('click', doGoal);
     <button class="nav-close" onclick="closeNav()">✕</button>
   </div>
   <div class="nav-section-label">Modules</div>
-  <a class="nav-item" href="/index.html">
+  <button class="nav-item" onclick="navToCrowd()">
     <span class="nav-item-icon">🔊</span>
     CROWD SYS
-  </a>
-  <a class="nav-item active" href="/commentator.html">
+  </button>
+  <button class="nav-item active" onclick="closeNav()">
     <span class="nav-item-icon">🎙</span>
     COMMENTARY
     <span class="nav-item-dot"></span>
-  </a>
+  </button>
   <div class="nav-footer">SUBBUTEO LIVE SYSTEM</div>
 </nav>
 
 <script>
+function navToCrowd() {
+  // If running inside the parent SPA iframe, tell parent to switch
+  if (window.parent !== window) {
+    window.parent.showSection('crowd');
+  } else {
+    window.location.href = '/index.html';
+  }
+}
 function openNav() {
   document.getElementById('navSidebar').classList.add('open');
   document.getElementById('navOverlay').classList.add('open');
