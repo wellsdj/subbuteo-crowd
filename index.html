@@ -162,6 +162,7 @@
   }
   .replay-video-wrap video {
     width: 100%; display: block;
+    transition: opacity 0.5s ease;
   }
   .replay-timestamp {
     font-size: 10px; letter-spacing: 3px; color: var(--muted);
@@ -1034,11 +1035,16 @@ function playReplayClip() {
   const go = () => {
     video.playbackRate = clip.rate;
     video.play().catch(() => {});
+    // Fade in once playback starts
+    requestAnimationFrame(() => requestAnimationFrame(() => { video.style.opacity = '1'; }));
     video.ontimeupdate = () => {
       if (isFinite(video.duration) && video.currentTime >= video.duration - (clip.endCutoff || 1)) advance();
     };
-    video.onended = advance; // fallback if duration is Infinity
+    video.onended = advance;
   };
+
+  // Fade out, then seek/reset, then play
+  video.style.opacity = '0';
 
   if (clip.seekFromEnd && isFinite(video.duration)) {
     video.currentTime = Math.max(0, video.duration - clip.seekFromEnd + (clip.skipStart || 0));
@@ -1054,6 +1060,7 @@ function startReplaySequence() {
   document.getElementById('replayPopup').classList.add('visible');
   const video = document.getElementById('replayVideo');
   video.muted = true;
+  video.style.opacity = '0';
   video.src = replayUrl;
   video.oncanplay = () => { video.oncanplay = null; playReplayClip(); };
   video.load();
@@ -1090,7 +1097,7 @@ function addToScoreboard(team) {
 function dismissReplay() {
   document.getElementById('replayPopup').classList.remove('visible');
   const v = document.getElementById('replayVideo');
-  v.pause(); v.onended = null; v.oncanplay = null; v.onseeked = null; v.src = '';
+  v.pause(); v.onended = null; v.oncanplay = null; v.onseeked = null; v.ontimeupdate = null; v.src = ''; v.style.opacity = '1';
   if (replayUrl) { URL.revokeObjectURL(replayUrl); replayUrl = null; }
   document.getElementById('scorePrompt').classList.add('visible');
 }
