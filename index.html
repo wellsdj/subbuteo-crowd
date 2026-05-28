@@ -156,14 +156,12 @@
   }
   .replay-video-wrap {
     position: relative; width: 90vw; max-width: 700px;
-    aspect-ratio: 16 / 9;
     border: 1px solid rgba(255,60,60,0.3);
     border-radius: 4px; overflow: hidden;
     background: #000;
   }
   .replay-video-wrap video {
-    width: 100%; height: 100%; display: block; object-fit: contain;
-    transition: opacity 0.7s ease;
+    width: 100%; display: block;
   }
   .replay-timestamp {
     font-size: 10px; letter-spacing: 3px; color: var(--muted);
@@ -1007,19 +1005,10 @@ function playReplayClip() {
   const clip = REPLAY_SEQ[idx];
   updateReplayUI(idx);
   video.muted = true;
+  video.playbackRate = clip.rate;
   video.onended = () => { replaySeqIdx++; playReplayClip(); };
 
-  // Fade out, then seek/reset, then play and fade back in
-  video.style.opacity = '0';
-
-  const go = () => {
-    video.playbackRate = clip.rate;
-    video.play().catch(() => {});
-    // Two rAFs ensure the browser has painted the new frame before fading in
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      video.style.opacity = '1';
-    }));
-  };
+  const go = () => video.play().catch(() => {});
 
   if (clip.seekFromEnd && isFinite(video.duration)) {
     video.currentTime = Math.max(0, video.duration - clip.seekFromEnd);
@@ -1035,7 +1024,6 @@ function startReplaySequence() {
   document.getElementById('replayPopup').classList.add('visible');
   const video = document.getElementById('replayVideo');
   video.muted = true;
-  video.style.opacity = '0';
   video.src = replayUrl;
   video.oncanplay = () => { video.oncanplay = null; playReplayClip(); };
   video.load();
