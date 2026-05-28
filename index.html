@@ -985,10 +985,10 @@ let replaySeqIdx = 0;
 let replayTimerHandle = null;
 
 const REPLAY_SEQ = [
-  { label: 'FULL REPLAY', rate: 1.0,  seekFromEnd: null },
-  { label: 'LAST 5s',     rate: 1.0,  seekFromEnd: 5    },
-  { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5    },
-  { label: 'SUPER SLOW',  rate: 0.25, seekFromEnd: 3    },
+  { label: 'FULL REPLAY', rate: 1.0,  seekFromEnd: null, skipStart: 0 },
+  { label: 'LAST 5s',     rate: 1.0,  seekFromEnd: 5,    skipStart: 1 },
+  { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5,    skipStart: 1 },
+  { label: 'SUPER SLOW',  rate: 0.25, seekFromEnd: 3,    skipStart: 1 },
 ];
 
 function updateReplayUI(idx) {
@@ -1026,7 +1026,7 @@ function playReplayClip() {
   };
 
   if (clip.seekFromEnd && isFinite(video.duration)) {
-    video.currentTime = Math.max(0, video.duration - clip.seekFromEnd);
+    video.currentTime = Math.max(0, video.duration - clip.seekFromEnd + (clip.skipStart || 0));
     video.onseeked = () => { video.onseeked = null; go(); };
   } else {
     video.currentTime = 0;
