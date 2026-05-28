@@ -986,15 +986,15 @@ let replaySeqIdx = 0;
 let replayTimerHandle = null;
 
 const REPLAY_SEQ = [
-  { label: 'FULL REPLAY', rate: 1.0,  seekFromEnd: null, skipStart: 0 },
-  { label: 'LAST 5s',     rate: 1.0,  seekFromEnd: 5,    skipStart: 1 },
-  { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5,    skipStart: 1 },
-  { label: 'SUPER SLOW',  rate: 0.25, seekFromEnd: 3,    skipStart: 1 },
+  { label: 'FULL REPLAY', rate: 1.0,  seekFromEnd: null, skipStart: 0, endCutoff: 0.5 },
+  { label: 'LAST 5s',     rate: 1.0,  seekFromEnd: 5,    skipStart: 1, endCutoff: 0.5 },
+  { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5,    skipStart: 1, endCutoff: 0.5 },
+  { label: 'SUPER SLOW',  rate: 0.25, seekFromEnd: 3,    skipStart: 1, endCutoff: 0.5 },
 ];
 
 const SAVE_REPLAY_SEQ = [
-  { label: 'REPLAY',      rate: 1.0,  seekFromEnd: 5, skipStart: 1 },
-  { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5, skipStart: 1 },
+  { label: 'REPLAY',      rate: 1.0,  seekFromEnd: 5, skipStart: 1, endCutoff: 1 },
+  { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5, skipStart: 1, endCutoff: 1 },
 ];
 
 let activeReplaySeq = REPLAY_SEQ;
@@ -1035,7 +1035,7 @@ function playReplayClip() {
     video.playbackRate = clip.rate;
     video.play().catch(() => {});
     video.ontimeupdate = () => {
-      if (isFinite(video.duration) && video.currentTime >= video.duration - 1) advance();
+      if (isFinite(video.duration) && video.currentTime >= video.duration - (clip.endCutoff || 1)) advance();
     };
     video.onended = advance; // fallback if duration is Infinity
   };
