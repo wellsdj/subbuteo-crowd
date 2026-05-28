@@ -43,7 +43,7 @@
   @keyframes pulse { 0%,100%{box-shadow:0 0 10px var(--green)} 50%{box-shadow:0 0 22px var(--green),0 0 40px rgba(0,255,136,.3)} }
   @keyframes ringPulse { 0%{opacity:.5;inset:-3px} 100%{opacity:0;inset:-16px} }
 
-  .screen { position:fixed; inset:0; z-index:10; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 16px; }
+  .screen { position:fixed; inset:0; z-index:10; display:flex; flex-direction:column; align-items:stretch; justify-content:center; padding:0 24px; overflow-y:auto; }
   .screen.hidden { display:none; }
   
 
@@ -63,7 +63,7 @@
     filter:blur(18px) opacity(.45); pointer-events:none;
   }
   .subtitle { font-family:'Share Tech Mono',monospace; font-size:12px; letter-spacing:5px; color:var(--grey); margin-top:8px; }
-  .divider { width:100%; display:flex; align-items:center; gap:14px; margin:22px 0 28px; animation:fadeD .7s .16s ease both; }
+  .divider { width:100%; max-width:780px; align-self:center; display:flex; align-items:center; gap:14px; margin:22px 0 28px; animation:fadeD .7s .16s ease both; }
   .divider::before,.divider::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,transparent,var(--green),transparent); }
   .div-diamond { width:10px; height:10px; background:var(--green); box-shadow:0 0 10px var(--green); transform:rotate(45deg); animation:pulse 2s ease infinite; }
   .card { width:100%; background:linear-gradient(145deg,rgba(10,20,42,.97) 0%,rgba(5,12,26,.99) 100%);
@@ -425,6 +425,16 @@
     font-family: 'Share Tech Mono', monospace;
     font-size: 9px; letter-spacing: 2px; color: rgba(255,255,255,0.12);
   }
+
+  /* comm screen uses full width */
+  #commScreen { align-items: stretch; }
+  #commScreen .comm-topbar,
+  #commScreen .comm-panels,
+  #commScreen .controls,
+  #commScreen .err-bar { width: 100%; }
+  /* input/context screens keep centered layout */
+  #inputScreen, #contextScreen { align-items: center; }
+
 </style>
 </head>
 <body>
@@ -1171,11 +1181,11 @@ document.getElementById('goalBtn').addEventListener('click', doGoal);
     <button class="nav-close" onclick="closeNav()">✕</button>
   </div>
   <div class="nav-section-label">Modules</div>
-  <a class="nav-item" href="/index.html" target="_blank">
+  <a class="nav-item" href="/index.html">
     <span class="nav-item-icon">🔊</span>
     CROWD SYS
   </a>
-  <a class="nav-item active" href="/commentator.html" target="_blank">
+  <a class="nav-item active" href="/commentator.html">
     <span class="nav-item-icon">🎙</span>
     COMMENTARY
     <span class="nav-item-dot"></span>
