@@ -174,50 +174,6 @@
   }
   .replay-dismiss:hover { border-color: var(--accent); color: var(--accent); }
 
-  /* ── Camera picker modal ── */
-  .cam-picker-modal {
-    position: fixed; inset: 0; z-index: 900;
-    background: rgba(0,0,0,0.92);
-    display: flex; align-items: center; justify-content: center;
-    opacity: 0; pointer-events: none; transition: opacity 0.25s;
-  }
-  .cam-picker-modal.visible { opacity: 1; pointer-events: all; }
-  .cam-picker-box {
-    background: var(--panel-bg); border: 1px solid var(--border);
-    border-radius: 8px; padding: 32px 36px; width: 90vw; max-width: 420px;
-    display: flex; flex-direction: column; gap: 20px;
-  }
-  .cam-picker-title {
-    font-size: 13px; font-weight: 700; letter-spacing: 5px; color: var(--accent);
-    text-align: center;
-  }
-  .cam-picker-row { display: flex; flex-direction: column; gap: 6px; }
-  .cam-picker-row label {
-    font-size: 9px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase;
-  }
-  .cam-picker-row select {
-    background: var(--surface); border: 1px solid var(--border);
-    color: var(--text); font-size: 12px; padding: 8px 10px;
-    border-radius: 4px; cursor: pointer; font-family: inherit;
-    appearance: none; -webkit-appearance: none;
-  }
-  .cam-picker-note {
-    font-size: 9px; letter-spacing: 1px; color: var(--muted); text-align: center; line-height: 1.5;
-  }
-  .cam-picker-start {
-    background: var(--accent); color: #000; border: none;
-    font-size: 11px; font-weight: 700; letter-spacing: 4px;
-    padding: 12px 24px; border-radius: 4px; cursor: pointer;
-    transition: opacity 0.2s; text-transform: uppercase; font-family: inherit;
-  }
-  .cam-picker-start:hover { opacity: 0.85; }
-  .cam-reset-btn {
-    font-size: 9px; letter-spacing: 2px; color: var(--muted);
-    background: none; border: none; cursor: pointer; text-decoration: underline;
-    text-transform: uppercase; padding: 2px 0; font-family: inherit;
-  }
-  .cam-reset-btn:hover { color: var(--accent); }
-
   /* ── Flash overlay ── */
   .flash { position: fixed; inset: 0; z-index: 700; pointer-events: none; opacity: 0; transition: opacity 0.08s; background: var(--red); }
 
@@ -501,6 +457,61 @@
   }
   .match-section.active { opacity: 1; pointer-events: all; z-index: 10; }
 
+  /* ── Replay Section ── */
+  .replay-section {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0;
+    transition: opacity 0.2s;
+    background: var(--bg);
+    display: flex; flex-direction: column; align-items: center;
+    padding-top: 36px; gap: 0;
+  }
+  .replay-section.active { opacity: 1; pointer-events: all; z-index: 10; }
+  .rs-header {
+    width: 100%; padding: 18px 24px 10px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .rs-title { font-size: 11px; font-weight: 700; letter-spacing: 5px; color: var(--accent); }
+  .rs-status {
+    font-size: 9px; letter-spacing: 3px; color: var(--muted);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .rs-status-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--muted);
+  }
+  .rs-status-dot.rec { background: var(--red); animation: blink 0.8s infinite; }
+  .rs-cam-wrap {
+    width: 100%; flex: 1; position: relative; background: #000; overflow: hidden;
+    max-height: calc(100vh - 180px);
+  }
+  .rs-cam-wrap video {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .rs-cam-placeholder {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 10px;
+    color: var(--muted);
+  }
+  .rs-cam-placeholder-icon { font-size: 40px; opacity: 0.3; }
+  .rs-cam-placeholder-text { font-size: 9px; letter-spacing: 3px; }
+  .rs-controls {
+    width: 100%; padding: 14px 24px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .rs-cam-select {
+    flex: 1; background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); font-size: 11px; padding: 10px 12px;
+    border-radius: 4px; cursor: pointer; font-family: inherit;
+    appearance: none; -webkit-appearance: none;
+  }
+  .rs-start-btn {
+    background: var(--accent); color: #000; border: none;
+    font-size: 10px; font-weight: 700; letter-spacing: 3px;
+    padding: 10px 22px; border-radius: 4px; cursor: pointer;
+    transition: opacity 0.2s; font-family: inherit; white-space: nowrap;
+  }
+  .rs-start-btn:hover { opacity: 0.85; }
+  .rs-start-btn.stop { background: var(--red); color: #fff; }
+
   .ms-scoreboard {
     display: flex; align-items: center; justify-content: center;
     gap: 0; width: 100%; max-width: 800px;
@@ -642,22 +653,6 @@
   <button class="replay-dismiss" onclick="dismissReplay()">CLOSE REPLAY</button>
 </div>
 
-<!-- ── Camera picker modal ── -->
-<div class="cam-picker-modal" id="camPickerModal">
-  <div class="cam-picker-box">
-    <div class="cam-picker-title">CAMERA SETUP</div>
-    <div class="cam-picker-row">
-      <label>Gesture Detection Camera</label>
-      <select id="camPickerGesture"></select>
-    </div>
-    <div class="cam-picker-row">
-      <label>Replay Recording Camera</label>
-      <select id="camPickerReplay"></select>
-    </div>
-    <div class="cam-picker-note">Your choice is saved. Use "Reset cameras" in the gesture panel to change it.</div>
-    <button class="cam-picker-start" id="camPickerStart">START CAMERAS</button>
-  </div>
-</div>
 
   <!-- two input panels -->
   <div class="panels-row">
@@ -691,7 +686,6 @@
       <button class="panel-status-btn" id="handBtn" onclick="toggleGesture()">
         <span id="handLabel">STANDBY</span>
       </button>
-      <button class="cam-reset-btn" id="camResetBtn" onclick="resetCamChoice()" style="display:none">Reset cameras</button>
     </div>
 
   </div>
@@ -1076,7 +1070,6 @@ function toggleListening() {
 // ── MediaPipe Gesture Detection ──
 let gestureRecognizer = null;
 let gestureStream = null;
-let replayStream = null;
 let gestureActive = false;
 let gestureAnimFrame = null;
 let lastGestureTime = 0;
@@ -1106,77 +1099,15 @@ async function initGestureRecognizer() {
   });
 }
 
-function showCamPicker(cams) {
-  return new Promise(resolve => {
-    const modal = document.getElementById('camPickerModal');
-    const gSel = document.getElementById('camPickerGesture');
-    const rSel = document.getElementById('camPickerReplay');
-    [gSel, rSel].forEach(sel => {
-      sel.innerHTML = cams.map((c, i) =>
-        `<option value="${c.deviceId}">${c.label || 'Camera ' + (i + 1)}</option>`
-      ).join('');
-    });
-    if (cams.length >= 2) { gSel.value = cams[0].deviceId; rSel.value = cams[1].deviceId; }
-    modal.classList.add('visible');
-    document.getElementById('camPickerStart').onclick = () => {
-      localStorage.setItem('gestureDeviceId', gSel.value);
-      localStorage.setItem('replayDeviceId', rSel.value);
-      modal.classList.remove('visible');
-      resolve();
-    };
-  });
-}
-
-function resetCamChoice() {
-  localStorage.removeItem('gestureDeviceId');
-  localStorage.removeItem('replayDeviceId');
-  document.getElementById('camResetBtn').style.display = 'none';
-  if (gestureActive) stopGesture();
-}
-
 async function startGesture() {
   const label = document.getElementById('handLabel');
   label.textContent = 'Loading...';
   if (!gestureRecognizer) await initGestureRecognizer();
-
-  // Enumerate cameras — need a temp permission request first so labels are populated
-  await navigator.mediaDevices.getUserMedia({ video: true }).then(s => s.getTracks().forEach(t => t.stop())).catch(() => {});
-  const devices = await navigator.mediaDevices.enumerateDevices();
-  const cams = devices.filter(d => d.kind === 'videoinput');
-
-  let gestureDeviceId = localStorage.getItem('gestureDeviceId');
-  let replayDeviceId = localStorage.getItem('replayDeviceId');
-
-  if (cams.length >= 2 && (!gestureDeviceId || !replayDeviceId)) {
-    await showCamPicker(cams);
-    gestureDeviceId = localStorage.getItem('gestureDeviceId');
-    replayDeviceId = localStorage.getItem('replayDeviceId');
-  }
-
-  const gestureConstraints = gestureDeviceId
-    ? { video: { deviceId: { exact: gestureDeviceId } } }
-    : { video: { facingMode: 'user' } };
-  gestureStream = await navigator.mediaDevices.getUserMedia(gestureConstraints);
-
+  gestureStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
   const video = document.getElementById('gestureVideo');
   video.srcObject = gestureStream;
   await new Promise(r => { video.onloadedmetadata = r; });
   video.play();
-
-  // Open separate replay stream if a different camera is chosen
-  if (replayDeviceId && replayDeviceId !== gestureDeviceId) {
-    try {
-      replayStream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: replayDeviceId } } });
-      startReplayRecorder(replayStream);
-    } catch(e) {
-      replayStream = null;
-      startReplayRecorder(gestureStream);
-    }
-  } else {
-    startReplayRecorder(gestureStream);
-  }
-
-  if (cams.length >= 2) document.getElementById('camResetBtn').style.display = '';
   document.getElementById('gestureVideo').classList.add('visible');
   gestureActive = true;
   updateHandUI();
@@ -1259,9 +1190,7 @@ function captureReplay() {
 function stopGesture() {
   gestureActive = false;
   cancelAnimationFrame(gestureAnimFrame);
-  stopReplayRecorder();
   if (gestureStream) { gestureStream.getTracks().forEach(t => t.stop()); gestureStream = null; }
-  if (replayStream) { replayStream.getTracks().forEach(t => t.stop()); replayStream = null; }
   document.getElementById('gestureVideo').classList.remove('visible');
   document.getElementById('gestureTag').textContent = '';
   updateHandUI();
@@ -1315,6 +1244,81 @@ function updateHandUI() {
   }
 }
 
+// ── Replay Section ──
+let replaySectionStream = null;
+let replaySectionActive = false;
+
+async function populateReplayCamList() {
+  const sel = document.getElementById('rsCamSelect');
+  // Request permission so labels appear
+  await navigator.mediaDevices.getUserMedia({ video: true })
+    .then(s => s.getTracks().forEach(t => t.stop())).catch(() => {});
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const cams = devices.filter(d => d.kind === 'videoinput');
+  const current = sel.value;
+  sel.innerHTML = cams.map((c, i) =>
+    `<option value="${c.deviceId}">${c.label || 'Camera ' + (i + 1)}</option>`
+  ).join('');
+  if (current && cams.find(c => c.deviceId === current)) sel.value = current;
+}
+
+async function toggleReplaySection() {
+  if (replaySectionActive) {
+    stopReplaySectionCamera();
+  } else {
+    await startReplaySectionCamera();
+  }
+}
+
+async function startReplaySectionCamera() {
+  const deviceId = document.getElementById('rsCamSelect').value;
+  const constraints = deviceId
+    ? { video: { deviceId: { exact: deviceId } } }
+    : { video: true };
+  try {
+    replaySectionStream = await navigator.mediaDevices.getUserMedia(constraints);
+  } catch(e) {
+    alert('Could not open camera: ' + e.message);
+    return;
+  }
+  const vid = document.getElementById('rsCamVideo');
+  vid.srcObject = replaySectionStream;
+  document.getElementById('rsCamPlaceholder').style.display = 'none';
+  startReplayRecorder(replaySectionStream);
+  replaySectionActive = true;
+  updateReplaySectionUI();
+}
+
+function stopReplaySectionCamera() {
+  stopReplayRecorder();
+  if (replaySectionStream) { replaySectionStream.getTracks().forEach(t => t.stop()); replaySectionStream = null; }
+  const vid = document.getElementById('rsCamVideo');
+  vid.srcObject = null;
+  document.getElementById('rsCamPlaceholder').style.display = '';
+  replaySectionActive = false;
+  updateReplaySectionUI();
+}
+
+function updateReplaySectionUI() {
+  const btn = document.getElementById('rsStartBtn');
+  const dot = document.getElementById('rsStatusDot');
+  const txt = document.getElementById('rsStatusText');
+  const navDot = document.getElementById('replayDot');
+  if (replaySectionActive) {
+    btn.textContent = 'STOP RECORDING';
+    btn.classList.add('stop');
+    dot.classList.add('rec');
+    txt.textContent = 'RECORDING';
+    navDot.style.display = '';
+  } else {
+    btn.textContent = 'START RECORDING';
+    btn.classList.remove('stop');
+    dot.classList.remove('rec');
+    txt.textContent = 'STANDBY';
+    navDot.style.display = 'none';
+  }
+}
+
 </script>
 
 <!-- ── Commentator iframe (always loaded, audio keeps playing when hidden) ── -->
@@ -1357,6 +1361,30 @@ function updateHandUI() {
   </div>
 </div>
 
+<!-- ── Replay Section ── -->
+<div class="replay-section" id="replaySection">
+  <div class="rs-header">
+    <div class="rs-title">INSTANT REPLAY</div>
+    <div class="rs-status" id="rsStatus">
+      <div class="rs-status-dot" id="rsStatusDot"></div>
+      <span id="rsStatusText">STANDBY</span>
+    </div>
+  </div>
+  <div class="rs-cam-wrap" id="rsCamWrap">
+    <video id="rsCamVideo" autoplay muted playsinline></video>
+    <div class="rs-cam-placeholder" id="rsCamPlaceholder">
+      <div class="rs-cam-placeholder-icon">&#x1F4F7;</div>
+      <div class="rs-cam-placeholder-text">NO CAMERA — SELECT &amp; START BELOW</div>
+    </div>
+  </div>
+  <div class="rs-controls">
+    <select class="rs-cam-select" id="rsCamSelect">
+      <option value="">Select camera...</option>
+    </select>
+    <button class="rs-start-btn" id="rsStartBtn" onclick="toggleReplaySection()">START RECORDING</button>
+  </div>
+</div>
+
 <!-- ── Hamburger (always visible) ── -->
 <button class="hamburger-btn" onclick="openNav()" aria-label="Menu"><span></span><span></span><span></span></button>
 
@@ -1383,6 +1411,11 @@ function updateHandUI() {
     MATCH TIMER
     <span class="nav-item-dot" id="matchDot" style="display:none"></span>
   </button>
+  <button class="nav-item" id="navReplay" onclick="showSection('replay')">
+    <span class="nav-item-icon">&#x1F3A5;</span>
+    REPLAY CAM
+    <span class="nav-item-dot" id="replayDot" style="display:none"></span>
+  </button>
   <div class="nav-footer">SUBBUTEO LIVE SYSTEM</div>
 </nav>
 
@@ -1394,18 +1427,19 @@ function showSection(section) {
   const app = document.querySelector('.app');
   const frame = document.getElementById('commFrame');
   const matchSec = document.getElementById('matchSection');
+  const replaySec = document.getElementById('replaySection');
 
   // Hide all
-  [app, frame, matchSec].forEach(el => {
+  [app, frame, matchSec, replaySec].forEach(el => {
     el.style.opacity = '0';
     el.style.pointerEvents = 'none';
     el.style.zIndex = '0';
-    if (el === matchSec) el.classList.remove('active');
+    if (el === matchSec || el === replaySec) el.classList.remove('active');
   });
 
   // Deactivate all nav
-  ['navCrowd','navComm','navMatch'].forEach(id => document.getElementById(id).classList.remove('active'));
-  ['crowdDot','commDot','matchDot'].forEach(id => document.getElementById(id).style.display = 'none');
+  ['navCrowd','navComm','navMatch','navReplay'].forEach(id => document.getElementById(id).classList.remove('active'));
+  ['crowdDot','commDot','matchDot','replayDot'].forEach(id => document.getElementById(id).style.display = 'none');
 
   currentSection = section;
 
@@ -1422,6 +1456,12 @@ function showSection(section) {
     matchSec.classList.add('active');
     document.getElementById('navMatch').classList.add('active');
     document.getElementById('matchDot').style.display = '';
+  } else if (section === 'replay') {
+    replaySec.style.opacity = '1'; replaySec.style.pointerEvents = 'all'; replaySec.style.zIndex = '10';
+    replaySec.classList.add('active');
+    document.getElementById('navReplay').classList.add('active');
+    document.getElementById('replayDot').style.display = replaySectionActive ? '' : 'none';
+    populateReplayCamList();
   }
   closeNav();
 }
