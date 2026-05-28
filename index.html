@@ -417,13 +417,13 @@
 
   /* ── Match Section (full screen) ── */
   .match-section {
-    position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0;
+    position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0;
     transition: opacity 0.2s;
-    background: linear-gradient(rgba(8,12,24,0.92), rgba(8,12,24,0.92)), url('/stadium.jpg') center/cover no-repeat;
+    background: linear-gradient(rgba(8,12,24,0.88), rgba(8,12,24,0.88)), url('/stadium.jpg') center/cover no-repeat;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     padding-top: 36px;
   }
-  .match-section.active { opacity: 1; pointer-events: all; z-index: 5; }
+  .match-section.active { opacity: 1; pointer-events: all; z-index: 10; }
 
   .ms-scoreboard {
     display: flex; align-items: center; justify-content: center;
@@ -524,40 +524,6 @@
 </div>
 
 <div class="app">
-
-
-<!-- ── Match Section ── -->
-<div class="match-section" id="matchSection">
-  <div class="ms-scoreboard">
-    <div class="ms-team-block">
-      <div class="ms-team-name home">FLANDERS</div>
-    </div>
-    <div class="ms-score-block">
-      <div class="ms-score-btns">
-        <button class="ms-score-btn" onclick="changeScore('home',1)">+</button>
-        <button class="ms-score-btn" onclick="changeScore('home',-1)">−</button>
-      </div>
-      <div class="ms-score-num" id="msHomeScore">0</div>
-      <div class="ms-score-sep">—</div>
-      <div class="ms-score-num" id="msAwayScore">0</div>
-      <div class="ms-score-btns">
-        <button class="ms-score-btn away" onclick="changeScore('away',1)">+</button>
-        <button class="ms-score-btn away" onclick="changeScore('away',-1)">−</button>
-      </div>
-    </div>
-    <div class="ms-team-block">
-      <div class="ms-team-name away">PETERBOROUGH</div>
-    </div>
-  </div>
-
-  <div class="ms-timer" id="msTimer">20:00</div>
-  <div class="ms-progress"><div class="ms-progress-bar" id="msProgressBar" style="width:100%"></div></div>
-
-  <div class="ms-controls">
-    <button class="ms-ctrl-btn primary" id="msStartBtn" onclick="timerToggle()">START</button>
-    <button class="ms-ctrl-btn danger" onclick="timerReset()">RESET</button>
-  </div>
-</div>
 
   <!-- match header -->
   <div class="match-bar">
@@ -1187,6 +1153,39 @@ function updateHandUI() {
   transition:opacity 0.2s;
 "></iframe>
 
+<!-- ── Match Section ── -->
+<div class="match-section" id="matchSection">
+  <div class="ms-scoreboard">
+    <div class="ms-team-block">
+      <div class="ms-team-name home">FLANDERS</div>
+    </div>
+    <div class="ms-score-block">
+      <div class="ms-score-btns">
+        <button class="ms-score-btn" onclick="changeScore('home',1)">+</button>
+        <button class="ms-score-btn" onclick="changeScore('home',-1)">−</button>
+      </div>
+      <div class="ms-score-num" id="msHomeScore">0</div>
+      <div class="ms-score-sep">—</div>
+      <div class="ms-score-num" id="msAwayScore">0</div>
+      <div class="ms-score-btns">
+        <button class="ms-score-btn away" onclick="changeScore('away',1)">+</button>
+        <button class="ms-score-btn away" onclick="changeScore('away',-1)">−</button>
+      </div>
+    </div>
+    <div class="ms-team-block">
+      <div class="ms-team-name away">PETERBOROUGH</div>
+    </div>
+  </div>
+
+  <div class="ms-timer" id="msTimer">20:00</div>
+  <div class="ms-progress"><div class="ms-progress-bar" id="msProgressBar" style="width:100%"></div></div>
+
+  <div class="ms-controls">
+    <button class="ms-ctrl-btn primary" id="msStartBtn" onclick="timerToggle()">START</button>
+    <button class="ms-ctrl-btn danger" onclick="timerReset()">RESET</button>
+  </div>
+</div>
+
 <!-- ── Navigation Sidebar ── -->
 <div class="nav-overlay" id="navOverlay" onclick="closeNav()"></div>
 <nav class="nav-sidebar" id="navSidebar">
@@ -1245,7 +1244,7 @@ function showSection(section) {
     document.getElementById('navComm').classList.add('active');
     document.getElementById('commDot').style.display = '';
   } else if (section === 'match') {
-    matchSec.style.opacity = '1'; matchSec.style.pointerEvents = 'all'; matchSec.style.zIndex = '5';
+    matchSec.style.opacity = '1'; matchSec.style.pointerEvents = 'all'; matchSec.style.zIndex = '10';
     matchSec.classList.add('active');
     document.getElementById('navMatch').classList.add('active');
     document.getElementById('matchDot').style.display = '';
