@@ -571,23 +571,32 @@
     font-family: 'Courier New', monospace;
   }
   .hl-overlay {
-    position: absolute; top: 14px; left: 14px; right: 14px;
-    display: flex; justify-content: space-between; align-items: center;
+    position: absolute; top: 14px; right: 14px;
+    display: flex; justify-content: flex-end; align-items: center;
     pointer-events: none; z-index: 5;
   }
-  .hl-overlay-board {
+  .hl-bottom-board {
+    position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
     display: flex; align-items: center; gap: 10px;
-    background: rgba(0,0,0,0.7); border: 1px solid rgba(0,232,122,0.3);
-    padding: 8px 14px; border-radius: 4px;
+    background: rgba(0,0,0,0.82); border: 1px solid rgba(255,255,255,0.15);
+    padding: 10px 22px; border-radius: 6px;
     font-family: 'Courier New', monospace;
-    font-size: 14px; font-weight: 700; letter-spacing: 2px;
+    font-size: 13px; font-weight: 700; letter-spacing: 3px;
+    pointer-events: none; z-index: 5; white-space: nowrap;
   }
-  .hl-overlay-board .hl-team-h { color: #ff5252; }
-  .hl-overlay-board .hl-team-a { color: #4a9eff; }
-  .hl-overlay-board .hl-score {
-    color: #fff; font-size: 18px;
-    padding: 0 4px;
+  .hl-bottom-board .hl-bb-home { color: #ff5252; }
+  .hl-bottom-board .hl-bb-away { color: #4a9eff; }
+  .hl-bottom-board .hl-bb-score { color: #fff; font-size: 22px; padding: 0 8px; }
+  .hl-goal-flash {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Courier New', monospace;
+    font-size: clamp(52px, 14vw, 100px); font-weight: 700;
+    letter-spacing: 10px; text-transform: uppercase;
+    opacity: 0; pointer-events: none; z-index: 6;
+    transition: opacity 0.3s ease;
   }
+  .hl-goal-flash.visible { opacity: 1; }
   .hl-overlay-tag {
     font-size: 10px; letter-spacing: 4px; padding: 6px 14px;
     border-radius: 2px; font-weight: 700;
@@ -1363,11 +1372,15 @@ let hlStage = 'idle'; // 'title' | 'normal' | 'slomo' | 'final'
 let hlCumHome = 0, hlCumAway = 0;
 
 async function playHighlights() {
-  hlEntries = await getHighlights();
+  const allEntries = await getHighlights();
+  // Goals without a team attribution were discarded by the user — skip them
+  hlEntries = allEntries.filter(e => !(e.type === 'goal' && !e.team));
   if (hlEntries.length === 0) return;
   hlPlaying = true;
   hlIdx = 0;
   hlCumHome = 0; hlCumAway = 0;
+  document.getElementById('hlBoardHome').textContent = '0';
+  document.getElementById('hlBoardAway').textContent = '0';
 
   document.getElementById('hlPlayBtn').style.display = 'none';
   document.getElementById('hlStopBtn').style.display = '';
@@ -1396,6 +1409,8 @@ function showTitleCard() {
   const v = document.getElementById('hlVideo');
   v.pause(); v.src = ''; v.classList.remove('visible');
   document.getElementById('hlOverlay').style.display = 'none';
+  document.getElementById('hlBottomBoard').style.display = 'none';
+  document.getElementById('hlGoalFlash').classList.remove('visible');
 }
 
 function stopHighlights() {
@@ -1414,31 +1429,33 @@ function stopHighlights() {
   if (tc) tc.classList.remove('visible');
   const ov = document.getElementById('hlOverlay');
   if (ov) ov.style.display = 'none';
+  const bb = document.getElementById('hlBottomBoard');
+  if (bb) bb.style.display = 'none';
+  const gf = document.getElementById('hlGoalFlash');
+  if (gf) gf.classList.remove('visible');
 }
 
 function playNextHighlight() {
   if (!hlPlaying) return;
   if (hlIdx >= hlEntries.length) {
-    // Final card
     showTitleCard();
-    setTimeout(() => {
-      stopHighlights();
-    }, 4000);
+    setTimeout(() => { stopHighlights(); }, 4000);
     return;
   }
   const entry = hlEntries[hlIdx];
 
-  // Update cumulative score BEFORE the clip plays so overlay matches
-  if (entry.type === 'goal' && entry.team === 'home') hlCumHome++;
-  if (entry.type === 'goal' && entry.team === 'away') hlCumAway++;
-  document.getElementById('hlOvHome').textContent = hlCumHome;
-  document.getElementById('hlOvAway').textContent = hlCumAway;
+  // Show event tag (top-right)
   const tag = document.getElementById('hlOvTag');
   tag.classList.remove('goal','save','nearmiss','slomo');
   tag.classList.add(entry.type);
   tag.textContent = entry.type === 'goal' ? 'GOAL'
                   : entry.type === 'save' ? 'GREAT SAVE' : 'NEAR MISS';
   document.getElementById('hlOverlay').style.display = '';
+
+  // Show bottom scoreboard (current score before this clip)
+  document.getElementById('hlBoardHome').textContent = hlCumHome;
+  document.getElementById('hlBoardAway').textContent = hlCumAway;
+  document.getElementById('hlBottomBoard').style.display = '';
 
   if (hlBlobUrl) URL.revokeObjectURL(hlBlobUrl);
   hlBlobUrl = URL.createObjectURL(entry.blob);
@@ -1458,23 +1475,48 @@ function playNextHighlight() {
   v.onended = () => {
     if (!hlPlaying) return;
     if (hlStage === 'normal') {
-      // Play the slo-mo: last 5s at 0.5x
-      hlStage = 'slomo';
-      const slomoTag = document.getElementById('hlOvTag');
-      slomoTag.classList.remove('goal','save','nearmiss');
-      slomoTag.classList.add('slomo');
-      slomoTag.textContent = 'SLOW MOTION';
-      v.playbackRate = 0.5;
-      if (isFinite(v.duration)) v.currentTime = Math.max(0, v.duration - 5);
-      else v.currentTime = 0;
-      v.onseeked = () => { v.onseeked = null; v.play().catch(() => {}); };
+      if (entry.type === 'goal') {
+        // Flash "GOAL!" in team color, then increment scoreboard, then slo-mo
+        const flash = document.getElementById('hlGoalFlash');
+        const isHome = entry.team === 'home';
+        flash.textContent = 'GOAL!';
+        flash.style.color = isHome ? '#ff5252' : '#4a9eff';
+        flash.style.textShadow = '0 0 60px ' + (isHome ? '#ff5252' : '#4a9eff');
+        flash.classList.add('visible');
+        setTimeout(() => {
+          if (!hlPlaying) return;
+          // Increment scoreboard
+          if (isHome) hlCumHome++; else hlCumAway++;
+          document.getElementById('hlBoardHome').textContent = hlCumHome;
+          document.getElementById('hlBoardAway').textContent = hlCumAway;
+          flash.classList.remove('visible');
+          setTimeout(() => {
+            if (!hlPlaying) return;
+            startSloMo(v);
+          }, 300);
+        }, 2000);
+      } else {
+        startSloMo(v);
+      }
     } else {
-      // Done with this entry — move on
+      // Done with slo-mo — move on
       hlIdx++;
       playNextHighlight();
     }
   };
   v.load();
+}
+
+function startSloMo(v) {
+  hlStage = 'slomo';
+  const slomoTag = document.getElementById('hlOvTag');
+  slomoTag.classList.remove('goal','save','nearmiss');
+  slomoTag.classList.add('slomo');
+  slomoTag.textContent = 'SLOW MOTION';
+  v.playbackRate = 0.5;
+  if (isFinite(v.duration)) v.currentTime = Math.max(0, v.duration - 5);
+  else v.currentTime = 0;
+  v.onseeked = () => { v.onseeked = null; v.play().catch(() => {}); };
 }
 
 async function clearHighlightsConfirm() {
@@ -2061,15 +2103,16 @@ function updateReplaySectionUI() {
       <div class="hl-final-score" id="hlFinalScore" style="display:none">0 — 0</div>
     </div>
     <div class="hl-overlay" id="hlOverlay" style="display:none">
-      <div class="hl-overlay-board">
-        <span class="hl-team-h">FLA</span>
-        <span class="hl-score" id="hlOvHome">0</span>
-        <span style="color:#666">—</span>
-        <span class="hl-score" id="hlOvAway">0</span>
-        <span class="hl-team-a">PET</span>
-      </div>
       <div class="hl-overlay-tag" id="hlOvTag">GOAL</div>
     </div>
+    <div class="hl-bottom-board" id="hlBottomBoard" style="display:none">
+      <span class="hl-bb-home">FLANDERS</span>
+      <span class="hl-bb-score" id="hlBoardHome">0</span>
+      <span style="color:#666">—</span>
+      <span class="hl-bb-score" id="hlBoardAway">0</span>
+      <span class="hl-bb-away">PETERBOROUGH</span>
+    </div>
+    <div class="hl-goal-flash" id="hlGoalFlash"></div>
     <div class="hl-empty" id="hlEmpty" style="display:none">
       NO HIGHLIGHTS YET — SCORE A GOAL OR TRIGGER A SAVE / NEAR MISS WHILE RECORDING
     </div>
