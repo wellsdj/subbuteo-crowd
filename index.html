@@ -1363,7 +1363,59 @@ async function refreshHighlightsList() {
   } catch(e) {}
 }
 
-// ── Highlights playback engine ──
+// ── Highlights audio ──
+let hlCrowdSource = null;
+let hlCrowdGain = null;
+let hlGoalGainNode = null;
+
+function startHlAudio() {
+  if (!ctx || !crowdBuffer) return;
+  stopHlAudio();
+  // Duck all normal app sounds
+  masterGain.gain.setTargetAtTime(0.0, ctx.currentTime, 0.3);
+
+  hlCrowdGain = ctx.createGain();
+  hlCrowdGain.gain.setValueAtTime(0.0, ctx.currentTime);
+  hlCrowdGain.gain.linearRampToValueAtTime(0.65, ctx.currentTime + 1.5);
+  hlCrowdGain.connect(ctx.destination);
+
+  hlCrowdSource = ctx.createBufferSource();
+  hlCrowdSource.buffer = crowdBuffer;
+  hlCrowdSource.loop = true;
+  hlCrowdSource.connect(hlCrowdGain);
+  hlCrowdSource.start();
+}
+
+function stopHlAudio() {
+  if (hlCrowdSource) {
+    try { hlCrowdSource.stop(); } catch(e) {}
+    hlCrowdSource.disconnect();
+    hlCrowdSource = null;
+  }
+  if (hlCrowdGain) { hlCrowdGain.disconnect(); hlCrowdGain = null; }
+  if (hlGoalGainNode) { hlGoalGainNode.disconnect(); hlGoalGainNode = null; }
+  // Restore normal app audio
+  if (masterGain) masterGain.gain.setTargetAtTime(0.75, ctx.currentTime, 0.4);
+}
+
+async function playHlGoalSound() {
+  if (!ctx) return;
+  const buf = await loadGoalBuffer();
+  if (!hlPlaying) return; // highlights stopped while loading
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  if (hlGoalGainNode) hlGoalGainNode.disconnect();
+  hlGoalGainNode = ctx.createGain();
+  hlGoalGainNode.gain.setValueAtTime(2.5, ctx.currentTime);
+  hlGoalGainNode.gain.setValueAtTime(2.5, ctx.currentTime + 0.1);
+  hlGoalGainNode.gain.linearRampToValueAtTime(0.0, ctx.currentTime + 8);
+  src.connect(hlGoalGainNode);
+  hlGoalGainNode.connect(ctx.destination);
+  src.start();
+  src.stop(ctx.currentTime + 8);
+}
+
+
 let hlPlaying = false;
 let hlEntries = [];
 let hlIdx = 0;
@@ -1396,6 +1448,7 @@ async function playHighlights() {
   fs.style.display = '';
   fs.textContent = finalH + ' — ' + finalA;
 
+  startHlAudio();
   showTitleCard();
   setTimeout(() => {
     if (!hlPlaying) return;
@@ -1433,6 +1486,7 @@ function stopHighlights() {
   if (bb) bb.style.display = 'none';
   const gf = document.getElementById('hlGoalFlash');
   if (gf) gf.classList.remove('visible');
+  stopHlAudio();
 }
 
 function playNextHighlight() {
@@ -1483,6 +1537,7 @@ function playNextHighlight() {
         flash.style.color = isHome ? '#ff5252' : '#4a9eff';
         flash.style.textShadow = '0 0 60px ' + (isHome ? '#ff5252' : '#4a9eff');
         flash.classList.add('visible');
+        playHlGoalSound();
         setTimeout(() => {
           if (!hlPlaying) return;
           // Increment scoreboard
