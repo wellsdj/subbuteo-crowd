@@ -916,7 +916,8 @@ function playAdvert() {
 
   video.addEventListener('ended', closeAdvert);
   skip.addEventListener('click', closeAdvert);
-  video.play().catch(e => { showError('Advert failed: ' + e.message); closeAdvert(); });
+  video.addEventListener('error', closeAdvert, { once: true });
+  video.play().catch(() => { closeAdvert(); });
 }
 
 function showPostAdvertPlay() {
