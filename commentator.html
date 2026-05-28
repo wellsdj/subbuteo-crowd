@@ -829,23 +829,31 @@ let crowdFadeTimer = null;
 let musicFadeTimer = null;
 let musicDelayTimer = null;
 
+// Audio files are optional — fail silently if not present in this deployment
 const crowdAudio = new Audio('crowd sounds good bass.mp3');
 crowdAudio.loop = true; crowdAudio.volume = 0;
+let crowdAvailable = false;
+crowdAudio.addEventListener('canplaythrough', () => { crowdAvailable = true; }, { once: true });
+crowdAudio.addEventListener('error', () => { crowdAvailable = false; });
 
 const musicAudio = new Audio('tistodriftingofficialmusicvideoyoutube.mp3');
 musicAudio.loop = true; musicAudio.volume = 0;
+let musicAvailable = false;
+musicAudio.addEventListener('canplaythrough', () => { musicAvailable = true; }, { once: true });
+musicAudio.addEventListener('error', () => { musicAvailable = false; });
 
 function initAudioCtx() {
   if (audioStarted) return;
   audioStarted = true;
-  crowdAudio.play().catch(e => console.error('Crowd failed:', e));
+  if (crowdAvailable) crowdAudio.play().catch(() => {});
   musicDelayTimer = setTimeout(() => {
-    musicAudio.play().catch(e => console.error('Music failed:', e));
+    if (musicAvailable) musicAudio.play().catch(() => {});
     setMusicVolume(MUSIC_VOL);
   }, 3000);
 }
 
 function setCrowdVolume(target) {
+  if (!crowdAvailable) return;
   if (crowdFadeTimer) clearInterval(crowdFadeTimer);
   const start = crowdAudio.volume;
   const steps = 10; let step = 0;
@@ -857,6 +865,7 @@ function setCrowdVolume(target) {
 }
 
 function setMusicVolume(target) {
+  if (!musicAvailable) return;
   if (musicFadeTimer) clearInterval(musicFadeTimer);
   const start = musicAudio.volume;
   const steps = 10; let step = 0;
