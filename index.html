@@ -173,6 +173,14 @@
     transition: all 0.2s; text-transform: uppercase;
   }
   .replay-dismiss:hover { border-color: var(--accent); color: var(--accent); }
+  .replay-seq-bar {
+    display: flex; gap: 8px; align-items: center;
+  }
+  .replay-seq-pip {
+    width: 28px; height: 3px; border-radius: 2px;
+    background: rgba(255,255,255,0.15); transition: background 0.2s;
+  }
+  .replay-seq-pip.active { background: var(--accent); }
 
   /* ── Flash overlay ── */
   .flash { position: fixed; inset: 0; z-index: 700; pointer-events: none; opacity: 0; transition: opacity 0.08s; background: var(--red); }
@@ -643,14 +651,20 @@
 <!-- ── Replay popup ── -->
 <div class="replay-popup" id="replayPopup">
   <div class="replay-header">
-    <div class="replay-badge">● REC REPLAY</div>
-    <div class="replay-title">INSTANT REPLAY</div>
+    <div class="replay-badge">● INSTANT REPLAY</div>
+    <div class="replay-title" id="replayLabel">FULL REPLAY</div>
   </div>
   <div class="replay-video-wrap">
-    <video id="replayVideo" autoplay loop playsinline muted></video>
+    <video id="replayVideo" autoplay playsinline muted></video>
   </div>
-  <div class="replay-timestamp" id="replayTimestamp">Last 10 seconds before goal</div>
-  <button class="replay-dismiss" onclick="dismissReplay()">CLOSE REPLAY</button>
+  <div class="replay-seq-bar" id="replaySeqBar">
+    <span class="replay-seq-pip active" id="rsp0"></span>
+    <span class="replay-seq-pip" id="rsp1"></span>
+    <span class="replay-seq-pip" id="rsp2"></span>
+    <span class="replay-seq-pip" id="rsp3"></span>
+  </div>
+  <div class="replay-timestamp" id="replayTimestamp"></div>
+  <button class="replay-dismiss" onclick="dismissReplay()">DONE</button>
 </div>
 
 
@@ -953,8 +967,48 @@ async function checkPassword(e) {
 }
 
 // ── Goal popup ──
+// ── Replay sequence engine ──
+let replayUrl = null;
+let replaySeqIdx = 0;
+let replayTimerHandle = null;
+
+const REPLAY_SEQ = [
+  { label: 'FULL REPLAY',  secs: 10, rate: 1.0 },
+  { label: 'LAST 5s',      secs: 5,  rate: 1.0 },
+  { label: 'SLOW MOTION',  secs: 5,  rate: 0.5 },
+  { label: 'SUPER SLOW',   secs: 3,  rate: 0.25 },
+];
+
+function playReplayClip() {
+  const video = document.getElementById('replayVideo');
+  const idx = replaySeqIdx % REPLAY_SEQ.length;
+  const clip = REPLAY_SEQ[idx];
+  const D = video.duration || 12;
+  video.currentTime = Math.max(0, D - clip.secs);
+  video.playbackRate = clip.rate;
+  video.play().catch(() => {});
+  document.getElementById('replayLabel').textContent = clip.label;
+  document.getElementById('replayTimestamp').textContent =
+    ['10s · 1×', '5s · 1×', '5s · 0.5×', '3s · 0.25×'][idx];
+  REPLAY_SEQ.forEach((_, i) => {
+    document.getElementById('rsp' + i).classList.toggle('active', i === idx);
+  });
+}
+
+function startReplaySequence() {
+  replaySeqIdx = 0;
+  const video = document.getElementById('replayVideo');
+  video.onended = () => {
+    replaySeqIdx = (replaySeqIdx + 1) % REPLAY_SEQ.length;
+    playReplayClip();
+  };
+  video.src = replayUrl;
+  video.onloadedmetadata = playReplayClip;
+  document.getElementById('replayPopup').classList.add('visible');
+}
+
 function showGoalPopup() {
-  if (gestureStream || replayChunks.length > 0) {
+  if (replaySectionActive || replayChunks.length > 0) {
     captureReplay();
   } else {
     document.getElementById('goalPopup').classList.add('visible');
@@ -962,6 +1016,11 @@ function showGoalPopup() {
 }
 function dismissGoal() {
   document.getElementById('goalPopup').classList.remove('visible');
+  if (replayTimerHandle) {
+    clearTimeout(replayTimerHandle);
+    replayTimerHandle = null;
+    if (replayUrl) { URL.revokeObjectURL(replayUrl); replayUrl = null; }
+  }
   document.getElementById('scorePrompt').classList.add('visible');
 }
 function addToScoreboard(team) {
@@ -969,12 +1028,11 @@ function addToScoreboard(team) {
   if (team) changeScore(team, 1);
 }
 function dismissReplay() {
-  const popup = document.getElementById('replayPopup');
-  popup.classList.remove('visible');
+  document.getElementById('replayPopup').classList.remove('visible');
   const v = document.getElementById('replayVideo');
-  v.pause(); v.src = '';
-  // Now show the goal popup
-  document.getElementById('goalPopup').classList.add('visible');
+  v.pause(); v.onended = null; v.onloadedmetadata = null; v.src = '';
+  if (replayUrl) { URL.revokeObjectURL(replayUrl); replayUrl = null; }
+  document.getElementById('scorePrompt').classList.add('visible');
 }
 
 // ── Speech recognition ──
@@ -1150,41 +1208,36 @@ function stopReplayRecorder() {
 }
 
 function captureReplay() {
-  // Pause adding to buffer
   stopReplayRecorder();
 
   const chunks = replayChunks.map(c => c.data);
   if (chunks.length < 2) {
-    // Not enough footage — just show goal popup
     document.getElementById('goalPopup').classList.add('visible');
+    replayChunks = [];
+    replayInitChunk = null;
     return;
   }
 
-  // Prepend init chunk if it's not already first
   const allChunks = (replayInitChunk && replayChunks[0].data !== replayInitChunk)
     ? [replayInitChunk, ...chunks]
     : chunks;
 
-  const mimeType = replayChunks.length > 0
-    ? (replayRecorder?._mimeType || 'video/webm')
-    : 'video/webm';
-
   const blob = new Blob(allChunks, { type: 'video/webm' });
-  const url = URL.createObjectURL(blob);
-
-  const video = document.getElementById('replayVideo');
-  video.src = url;
-  video.muted = false;
-  video.volume = 0;
-  video.play().catch(() => {});
-
-  const secs = Math.round(replayChunks.length * REPLAY_CHUNK_MS / 1000);
-  document.getElementById('replayTimestamp').textContent =
-    'Last ~' + Math.min(secs, 10) + ' seconds before goal';
-
-  document.getElementById('replayPopup').classList.add('visible');
+  if (replayUrl) URL.revokeObjectURL(replayUrl);
+  replayUrl = URL.createObjectURL(blob);
   replayChunks = [];
   replayInitChunk = null;
+
+  // Show goal popup for 10s celebration, then auto-show replay
+  document.getElementById('goalPopup').classList.add('visible');
+  replayTimerHandle = setTimeout(() => {
+    replayTimerHandle = null;
+    document.getElementById('goalPopup').classList.remove('visible');
+    startReplaySequence();
+  }, 10000);
+
+  // Restart recording for next goal
+  if (replaySectionStream) startReplayRecorder(replaySectionStream);
 }
 
 function stopGesture() {
