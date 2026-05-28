@@ -1060,19 +1060,23 @@ function startReplaySequence() {
   video.load();
 }
 
+let replayIsGoal = false;
+
 function showGoalPopup() {
+  replayIsGoal = true;
   activeReplaySeq = REPLAY_SEQ;
   if (replaySectionActive || replayChunks.length > 0) {
-    captureReplay(true); // true = show goal popup + 10s delay
+    captureReplay(true);
   } else {
     document.getElementById('goalPopup').classList.add('visible');
   }
 }
 
 function showSaveReplay() {
+  replayIsGoal = false;
   activeReplaySeq = SAVE_REPLAY_SEQ;
   if (replaySectionActive || replayChunks.length > 0) {
-    captureReplay(false); // no goal popup, replay appears immediately
+    captureReplay(false);
   }
 }
 function dismissGoal() {
@@ -1093,7 +1097,7 @@ function dismissReplay() {
   const v = document.getElementById('replayVideo');
   v.pause(); v.onended = null; v.oncanplay = null; v.onseeked = null; v.src = ''; v.style.opacity = '1';
   if (replayUrl) { URL.revokeObjectURL(replayUrl); replayUrl = null; }
-  document.getElementById('scorePrompt').classList.add('visible');
+  if (replayIsGoal) document.getElementById('scorePrompt').classList.add('visible');
 }
 
 // ── Speech recognition ──
