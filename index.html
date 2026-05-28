@@ -987,15 +987,15 @@ let replaySeqIdx = 0;
 let replayTimerHandle = null;
 
 const REPLAY_SEQ = [
-  { label: 'FULL REPLAY', rate: 1.0,  seekFromEnd: null, skipStart: 0, endCutoff: 0.5 },
-  { label: 'LAST 5s',     rate: 1.0,  seekFromEnd: 5,    skipStart: 1, endCutoff: 0.5 },
-  { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5,    skipStart: 1, endCutoff: 0.5 },
-  { label: 'SUPER SLOW',  rate: 0.25, seekFromEnd: 3,    skipStart: 1, endCutoff: 0.5 },
+  { label: 'FULL REPLAY', rate: 1.0,  seekFromEnd: null, skipStart: 0 },
+  { label: 'LAST 5s',     rate: 1.0,  seekFromEnd: 5,    skipStart: 1 },
+  { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5,    skipStart: 1 },
+  { label: 'SUPER SLOW',  rate: 0.25, seekFromEnd: 3,    skipStart: 1 },
 ];
 
 const SAVE_REPLAY_SEQ = [
-  { label: 'REPLAY',      rate: 1.0,  seekFromEnd: 5, skipStart: 1, endCutoff: 1 },
-  { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5, skipStart: 1, endCutoff: 1 },
+  { label: 'REPLAY',      rate: 1.0,  seekFromEnd: 5, skipStart: 1 },
+  { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5, skipStart: 1 },
 ];
 
 let activeReplaySeq = REPLAY_SEQ;
@@ -1021,11 +1021,9 @@ function playReplayClip() {
   const clip = activeReplaySeq[idx];
   updateReplayUI(idx);
   video.muted = true;
-  video.ontimeupdate = null;
   video.onended = null;
 
   const advance = () => {
-    video.ontimeupdate = null;
     video.onended = null;
     video.pause();
     replaySeqIdx++;
@@ -1035,11 +1033,7 @@ function playReplayClip() {
   const go = () => {
     video.playbackRate = clip.rate;
     video.play().catch(() => {});
-    // Fade in once playback starts
     requestAnimationFrame(() => requestAnimationFrame(() => { video.style.opacity = '1'; }));
-    video.ontimeupdate = () => {
-      if (isFinite(video.duration) && video.currentTime >= video.duration - (clip.endCutoff || 1)) advance();
-    };
     video.onended = advance;
   };
 
@@ -1097,7 +1091,7 @@ function addToScoreboard(team) {
 function dismissReplay() {
   document.getElementById('replayPopup').classList.remove('visible');
   const v = document.getElementById('replayVideo');
-  v.pause(); v.onended = null; v.oncanplay = null; v.onseeked = null; v.ontimeupdate = null; v.src = ''; v.style.opacity = '1';
+  v.pause(); v.onended = null; v.oncanplay = null; v.onseeked = null; v.src = ''; v.style.opacity = '1';
   if (replayUrl) { URL.revokeObjectURL(replayUrl); replayUrl = null; }
   document.getElementById('scorePrompt').classList.add('visible');
 }
