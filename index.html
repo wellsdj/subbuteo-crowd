@@ -702,6 +702,19 @@
       </button>
     </div>
 
+    <div class="panel" id="replayCamPanel">
+      <div class="corner tl"></div><div class="corner tr"></div>
+      <div class="corner bl"></div><div class="corner br"></div>
+      <div class="panel-avatar">&#x1F3A5;</div>
+      <div class="panel-name">REPLAY CAM</div>
+      <div class="panel-role">PITCH CAMERA</div>
+      <video id="replayCamPreview" class="gesture-preview" autoplay muted playsinline></video>
+      <div class="gesture-tag" id="replayCamTag" style="font-size:8px;letter-spacing:2px;"></div>
+      <button class="panel-status-btn" id="replayCamBtn" onclick="toggleReplaySection()">
+        <span id="replayCamLabel">STANDBY</span>
+      </button>
+    </div>
+
   </div>
 
   <!-- play row -->
@@ -1363,19 +1376,30 @@ async function toggleReplaySection() {
 }
 
 async function startReplaySectionCamera() {
-  const deviceId = document.getElementById('rsCamSelect').value;
-  const constraints = deviceId
-    ? { video: { deviceId: { exact: deviceId } } }
-    : { video: true };
+  // Try to auto-pick external camera; fall back to rsCamSelect value or any camera
+  let deviceId = document.getElementById('rsCamSelect').value;
+  if (!deviceId) {
+    await navigator.mediaDevices.getUserMedia({ video: true })
+      .then(s => s.getTracks().forEach(t => t.stop())).catch(() => {});
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cams = devices.filter(d => d.kind === 'videoinput');
+    const external = cams.find(c => !isBuiltInCamera(c.label));
+    deviceId = external ? external.deviceId : (cams[0] ? cams[0].deviceId : null);
+  }
+  const constraints = deviceId ? { video: { deviceId: { exact: deviceId } } } : { video: true };
   try {
     replaySectionStream = await navigator.mediaDevices.getUserMedia(constraints);
   } catch(e) {
-    alert('Could not open camera: ' + e.message);
+    alert('Could not open replay camera: ' + e.message);
     return;
   }
-  const vid = document.getElementById('rsCamVideo');
-  vid.srcObject = replaySectionStream;
+  // Feed both the full-screen tab preview and the inline panel preview
+  const tabVid = document.getElementById('rsCamVideo');
+  tabVid.srcObject = replaySectionStream;
   document.getElementById('rsCamPlaceholder').style.display = 'none';
+  const panelVid = document.getElementById('replayCamPreview');
+  panelVid.srcObject = replaySectionStream;
+  panelVid.classList.add('visible');
   startReplayRecorder(replaySectionStream);
   replaySectionActive = true;
   updateReplaySectionUI();
@@ -1384,30 +1408,48 @@ async function startReplaySectionCamera() {
 function stopReplaySectionCamera() {
   stopReplayRecorder();
   if (replaySectionStream) { replaySectionStream.getTracks().forEach(t => t.stop()); replaySectionStream = null; }
-  const vid = document.getElementById('rsCamVideo');
-  vid.srcObject = null;
+  const tabVid = document.getElementById('rsCamVideo');
+  tabVid.srcObject = null;
   document.getElementById('rsCamPlaceholder').style.display = '';
+  const panelVid = document.getElementById('replayCamPreview');
+  panelVid.srcObject = null;
+  panelVid.classList.remove('visible');
+  document.getElementById('replayCamTag').textContent = '';
   replaySectionActive = false;
   updateReplaySectionUI();
 }
 
 function updateReplaySectionUI() {
+  // Update Replay Cam tab controls
   const btn = document.getElementById('rsStartBtn');
   const dot = document.getElementById('rsStatusDot');
   const txt = document.getElementById('rsStatusText');
   const navDot = document.getElementById('replayDot');
+  // Update inline panel button
+  const panelBtn = document.getElementById('replayCamBtn');
+  const panelLabel = document.getElementById('replayCamLabel');
+  const replayCamPanel = document.getElementById('replayCamPanel');
+  const tag = document.getElementById('replayCamTag');
   if (replaySectionActive) {
     btn.textContent = 'STOP RECORDING';
     btn.classList.add('stop');
     dot.classList.add('rec');
     txt.textContent = 'RECORDING';
     navDot.style.display = '';
+    panelBtn.classList.add('active');
+    panelLabel.textContent = 'RECORDING';
+    replayCamPanel.classList.add('active');
+    tag.textContent = '● REC';
   } else {
     btn.textContent = 'START RECORDING';
     btn.classList.remove('stop');
     dot.classList.remove('rec');
     txt.textContent = 'STANDBY';
     navDot.style.display = 'none';
+    panelBtn.classList.remove('active');
+    panelLabel.textContent = 'STANDBY';
+    replayCamPanel.classList.remove('active');
+    tag.textContent = '';
   }
 }
 
