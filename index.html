@@ -449,9 +449,9 @@ async function playGoal() {
   src.buffer = buf;
 
   const gainNode = ctx.createGain();
-  gainNode.gain.setValueAtTime(4.0, ctx.currentTime);
+  gainNode.gain.setValueAtTime(3.0, ctx.currentTime);
   // Hold full volume until fadeStart
-  gainNode.gain.setValueAtTime(4.0, ctx.currentTime + fadeStart);
+  gainNode.gain.setValueAtTime(3.0, ctx.currentTime + fadeStart);
   // Smooth fade to silence over the last 8 seconds
   gainNode.gain.linearRampToValueAtTime(0.0, ctx.currentTime + duration);
 
