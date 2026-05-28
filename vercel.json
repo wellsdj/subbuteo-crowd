@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/proxy/anthropic", "destination": "/api/proxy-anthropic" },
+    { "source": "/proxy/elevenlabs", "destination": "/api/proxy-elevenlabs" }
+  ]
+}
