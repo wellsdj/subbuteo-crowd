@@ -23,8 +23,9 @@
     --red-dim:   #991a1a;
   }
 
-  body {
-    background: var(--bg);
+  html, body {
+    background: linear-gradient(rgba(8,12,24,0.82), rgba(8,12,24,0.82)), url('/stadium.jpg') center/cover no-repeat;
+    background-attachment: scroll;
     color: var(--text);
     font-family: 'Inter', sans-serif;
     letter-spacing: 0.3px;
@@ -119,7 +120,7 @@
     min-height: 100vh;
     display: flex; flex-direction: column;
     position: relative; overflow: hidden;
-    background: linear-gradient(rgba(8,12,24,0.82), rgba(8,12,24,0.82)), url('/stadium.jpg') center/cover no-repeat fixed;
+    background: linear-gradient(rgba(8,12,24,0.82), rgba(8,12,24,0.82)), url('/stadium.jpg') center/cover no-repeat;
   }
   .app::before {
     content: '';
