@@ -100,6 +100,38 @@
   .goal-title { font-size: 26px; font-weight: 700; letter-spacing: 4px; color: var(--red); }
   .goal-sub { font-size: 13px; color: var(--muted); }
 
+  /* ── Scoreboard prompt ── */
+  .score-prompt {
+    position: fixed; inset: 0; z-index: 810;
+    background: rgba(0,0,0,0.7);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s;
+  }
+  .score-prompt.visible { opacity: 1; pointer-events: all; }
+  .score-prompt-card {
+    background: var(--surface); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 16px; padding: 32px 36px;
+    display: flex; flex-direction: column; align-items: center; gap: 20px;
+    max-width: 340px; width: 90%;
+  }
+  .score-prompt-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 4px; color: var(--muted);
+  }
+  .score-prompt-q {
+    font-size: 18px; font-weight: 700; color: var(--text); text-align: center;
+  }
+  .score-prompt-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .score-prompt-btn {
+    border: none; border-radius: 8px; padding: 12px 20px;
+    font-size: 11px; font-weight: 700; letter-spacing: 3px;
+    cursor: pointer; transition: opacity 0.15s; text-transform: uppercase;
+  }
+  .score-prompt-btn:hover { opacity: 0.85; }
+  .score-prompt-btn.no { background: var(--surface); border: 1px solid rgba(255,255,255,0.15); color: var(--muted); }
+  .score-prompt-btn.home { background: var(--accent); color: #000; }
+  .score-prompt-btn.away { background: #6699ff; color: #000; }
+
+
   /* ── Replay popup ── */
   .replay-popup {
     position: fixed; inset: 0; z-index: 850;
@@ -501,6 +533,20 @@
 </div>
 
 <!-- Goal detected popup -->
+
+<!-- ── Scoreboard prompt ── -->
+<div class="score-prompt" id="scorePrompt">
+  <div class="score-prompt-card">
+    <div class="score-prompt-title">GOAL SCORED</div>
+    <div class="score-prompt-q">Add to scoreboard?</div>
+    <div class="score-prompt-btns">
+      <button class="score-prompt-btn no" onclick="addToScoreboard(null)">NO</button>
+      <button class="score-prompt-btn home" onclick="addToScoreboard('home')">FLANDERS</button>
+      <button class="score-prompt-btn away" onclick="addToScoreboard('away')">PETERBOROUGH</button>
+    </div>
+  </div>
+</div>
+
 <div class="goal-popup" id="goalPopup">
   <div class="goal-card">
     <button class="goal-dismiss" onclick="dismissGoal()">&#x2715;</button>
@@ -861,6 +907,11 @@ function showGoalPopup() {
 }
 function dismissGoal() {
   document.getElementById('goalPopup').classList.remove('visible');
+  document.getElementById('scorePrompt').classList.add('visible');
+}
+function addToScoreboard(team) {
+  document.getElementById('scorePrompt').classList.remove('visible');
+  if (team) changeScore(team, 1);
 }
 function dismissReplay() {
   const popup = document.getElementById('replayPopup');

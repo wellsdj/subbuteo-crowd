@@ -627,19 +627,31 @@ function selectStatus(s) {
   document.getElementById('chip-ft').className = 'status-chip' + (s==='full_time' ?' sel-ft':'');
   document.getElementById('scoreWrap').classList.toggle('show', s!=='not_started');
 }
+function getLiveScore() {
+  // Read live score from parent scoreboard if running inside the SPA iframe
+  try {
+    if (window.parent !== window && typeof window.parent.homeScore === 'number') {
+      return { home: window.parent.homeScore, away: window.parent.awayScore };
+    }
+  } catch(e) {}
+  return null;
+}
+
 function getMatchContext() {
   const notes = document.getElementById('contextNotes').value.trim();
   let ctx = '';
   if (matchStatus==='not_started') {
     ctx = 'The match has NOT started yet. This is a pre-match show.';
-  } else if (matchStatus==='half_time') {
-    const hs = document.getElementById('homeScore').value||'0';
-    const as = document.getElementById('awayScore').value||'0';
-    ctx = 'The match is at HALF TIME. Score: '+homeTeam+' '+hs+' - '+as+' '+awayTeam+'.';
   } else {
-    const hs = document.getElementById('homeScore').value||'0';
-    const as = document.getElementById('awayScore').value||'0';
-    ctx = 'FULL TIME. Final score: '+homeTeam+' '+hs+' - '+as+' '+awayTeam+'.';
+    // Use live scoreboard score if available, otherwise fall back to manual inputs
+    const live = getLiveScore();
+    const hs = live !== null ? live.home : (document.getElementById('homeScore').value||'0');
+    const as = live !== null ? live.away : (document.getElementById('awayScore').value||'0');
+    if (matchStatus==='half_time') {
+      ctx = 'The match is at HALF TIME. Score: '+homeTeam+' '+hs+' - '+as+' '+awayTeam+'.';
+    } else {
+      ctx = 'FULL TIME. Final score: '+homeTeam+' '+hs+' - '+as+' '+awayTeam+'.';
+    }
   }
   if (notes) ctx += ' Extra context: '+notes;
   return ctx;
