@@ -521,6 +521,136 @@
   .rs-start-btn:hover { opacity: 0.85; }
   .rs-start-btn.stop { background: var(--red); color: #fff; }
 
+  /* ── Highlights Section ── */
+  .highlights-section {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0;
+    transition: opacity 0.2s;
+    background: #000;
+    display: flex; flex-direction: column;
+    padding-top: 36px;
+  }
+  .highlights-section.active { opacity: 1; pointer-events: all; z-index: 10; }
+  .hl-stage {
+    position: relative; flex: 1; background: #000; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .hl-video {
+    width: 100%; height: 100%; object-fit: contain; display: none;
+  }
+  .hl-video.visible { display: block; }
+  .hl-title-card {
+    position: absolute; inset: 0; display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px;
+    background: linear-gradient(135deg, #cc0000 0%, #080c18 50%, #0040cc 100%);
+  }
+  .hl-title-card.visible { display: flex; }
+  .hl-title-card .hl-tag {
+    font-size: 10px; letter-spacing: 8px; color: var(--accent);
+    font-weight: 700;
+  }
+  .hl-title-card .hl-h1 {
+    font-size: 44px; letter-spacing: 10px; color: #fff; font-weight: 700;
+    text-shadow: 0 0 20px rgba(0,232,122,0.4);
+  }
+  .hl-title-card .hl-vs {
+    display: flex; align-items: center; gap: 28px; margin-top: 18px;
+  }
+  .hl-title-card .hl-vs .home {
+    color: #ff5252; font-size: 28px; font-weight: 700; letter-spacing: 4px;
+  }
+  .hl-title-card .hl-vs .away {
+    color: #4a9eff; font-size: 28px; font-weight: 700; letter-spacing: 4px;
+  }
+  .hl-title-card .hl-vs .sep {
+    color: var(--muted); font-size: 18px; letter-spacing: 6px;
+  }
+  .hl-title-card .hl-final-score {
+    font-size: 64px; font-weight: 700; color: #fff;
+    margin-top: 22px; letter-spacing: 8px;
+    font-family: 'Courier New', monospace;
+  }
+  .hl-overlay {
+    position: absolute; top: 14px; left: 14px; right: 14px;
+    display: flex; justify-content: space-between; align-items: center;
+    pointer-events: none; z-index: 5;
+  }
+  .hl-overlay-board {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(0,0,0,0.7); border: 1px solid rgba(0,232,122,0.3);
+    padding: 8px 14px; border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 14px; font-weight: 700; letter-spacing: 2px;
+  }
+  .hl-overlay-board .hl-team-h { color: #ff5252; }
+  .hl-overlay-board .hl-team-a { color: #4a9eff; }
+  .hl-overlay-board .hl-score {
+    color: #fff; font-size: 18px;
+    padding: 0 4px;
+  }
+  .hl-overlay-tag {
+    font-size: 10px; letter-spacing: 4px; padding: 6px 14px;
+    border-radius: 2px; font-weight: 700;
+    animation: blink 0.8s infinite;
+  }
+  .hl-overlay-tag.goal { background: #cc0000; color: #fff; }
+  .hl-overlay-tag.save { background: #00e87a; color: #000; }
+  .hl-overlay-tag.nearmiss { background: #ffaa00; color: #000; }
+  .hl-overlay-tag.slomo { background: rgba(0,0,0,0.7); color: #fff; border: 1px solid rgba(255,255,255,0.3); animation: none; }
+  .hl-controls {
+    width: 100%; padding: 14px 24px;
+    display: flex; gap: 12px; align-items: center;
+  }
+  .hl-controls button {
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text); font-size: 10px; letter-spacing: 3px;
+    padding: 10px 18px; border-radius: 4px; cursor: pointer;
+    font-family: inherit; text-transform: uppercase;
+  }
+  .hl-controls button.primary { background: var(--accent); color: #000; border: none; }
+  .hl-controls button.danger { background: var(--red); color: #fff; border: none; }
+  .hl-controls .hl-meta {
+    flex: 1; font-size: 10px; letter-spacing: 3px; color: var(--muted);
+    text-align: right;
+  }
+  .hl-empty {
+    color: var(--muted); font-size: 12px; letter-spacing: 3px; text-align: center;
+  }
+
+  /* ── Generic question popup ── */
+  .q-popup {
+    position: fixed; inset: 0; z-index: 950;
+    background: rgba(0,0,0,0.92);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity 0.25s;
+  }
+  .q-popup.visible { opacity: 1; pointer-events: all; }
+  .q-box {
+    background: var(--panel-bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 30px 36px; width: 90vw; max-width: 440px;
+    display: flex; flex-direction: column; gap: 18px;
+  }
+  .q-title {
+    font-size: 13px; font-weight: 700; letter-spacing: 5px; color: var(--accent);
+    text-align: center;
+  }
+  .q-body {
+    font-size: 11px; letter-spacing: 2px; color: var(--muted);
+    text-align: center; line-height: 1.6;
+  }
+  .q-btns {
+    display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
+  }
+  .q-btns button {
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text); font-size: 10px; font-weight: 700; letter-spacing: 3px;
+    padding: 12px 18px; border-radius: 4px; cursor: pointer;
+    font-family: inherit; text-transform: uppercase;
+    flex: 1; min-width: 100px;
+  }
+  .q-btns button.keep { background: var(--accent); color: #000; border: none; }
+  .q-btns button.discard { background: var(--red); color: #fff; border: none; }
+
   .ms-scoreboard {
     display: flex; align-items: center; justify-content: center;
     gap: 0; width: 100%; max-width: 800px;
@@ -899,7 +1029,7 @@ function triggerReaction(type, btn) {
   if (!ctx) return;
   reactions[type]?.();
   if (btn) addRipple(btn);
-  if (type === 'save' || type === 'nearmiss') showSaveReplay();
+  if (type === 'save' || type === 'nearmiss') showSaveReplay(type);
 }
 
 
@@ -1061,9 +1191,11 @@ function startReplaySequence() {
 }
 
 let replayIsGoal = false;
+let currentReactionType = null; // 'goal' | 'save' | 'nearmiss' — for highlight saving
 
 function showGoalPopup() {
   replayIsGoal = true;
+  currentReactionType = 'goal';
   activeReplaySeq = REPLAY_SEQ;
   if (replaySectionActive || replayChunks.length > 0) {
     captureReplay(true);
@@ -1072,8 +1204,9 @@ function showGoalPopup() {
   }
 }
 
-function showSaveReplay() {
+function showSaveReplay(type) {
   replayIsGoal = false;
+  currentReactionType = type || 'save';
   activeReplaySeq = SAVE_REPLAY_SEQ;
   if (replaySectionActive || replayChunks.length > 0) {
     captureReplay(false);
@@ -1090,7 +1223,20 @@ function dismissGoal() {
 }
 function addToScoreboard(team) {
   document.getElementById('scorePrompt').classList.remove('visible');
-  if (team) changeScore(team, 1);
+  if (team) {
+    changeScore(team, 1);
+    if (pendingHighlightId !== null) {
+      updateHighlight(pendingHighlightId, { team, scoreAfter: { home: homeScore, away: awayScore } })
+        .catch(() => {});
+      pendingHighlightId = null;
+    }
+  } else {
+    // User clicked NO — not actually a goal, remove the highlight
+    if (pendingHighlightId !== null) {
+      deleteHighlight(pendingHighlightId).catch(() => {});
+      pendingHighlightId = null;
+    }
+  }
 }
 function dismissReplay() {
   document.getElementById('replayPopup').classList.remove('visible');
@@ -1099,6 +1245,286 @@ function dismissReplay() {
   if (replayUrl) { URL.revokeObjectURL(replayUrl); replayUrl = null; }
   if (replayIsGoal) document.getElementById('scorePrompt').classList.add('visible');
 }
+
+// ── Highlights (IndexedDB + playback) ──
+const HL_DB_NAME = 'subbuteo_highlights';
+const HL_STORE = 'clips';
+let highlightsEnabled = true;        // turned off until user confirms keep on refresh
+let pendingHighlightId = null;       // id of the just-saved goal highlight awaiting team assignment
+
+function openHL() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(HL_DB_NAME, 1);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(HL_STORE)) {
+        db.createObjectStore(HL_STORE, { keyPath: 'id', autoIncrement: true });
+      }
+    };
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror = e => reject(e.target.error);
+  });
+}
+
+async function saveHighlight(entry) {
+  const db = await openHL();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(HL_STORE, 'readwrite');
+    const req = tx.objectStore(HL_STORE).add(entry);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getHighlights() {
+  const db = await openHL();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(HL_STORE, 'readonly');
+    const req = tx.objectStore(HL_STORE).getAll();
+    req.onsuccess = () => resolve((req.result || []).sort((a, b) => a.timestamp - b.timestamp));
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function countHighlights() {
+  const db = await openHL();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(HL_STORE, 'readonly');
+    const req = tx.objectStore(HL_STORE).count();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function updateHighlight(id, patch) {
+  const db = await openHL();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(HL_STORE, 'readwrite');
+    const store = tx.objectStore(HL_STORE);
+    const g = store.get(id);
+    g.onsuccess = () => {
+      const e = g.result;
+      if (!e) return reject(new Error('not found'));
+      Object.assign(e, patch);
+      const p = store.put(e);
+      p.onsuccess = () => resolve();
+      p.onerror = () => reject(p.error);
+    };
+    g.onerror = () => reject(g.error);
+  });
+}
+
+async function deleteHighlight(id) {
+  const db = await openHL();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(HL_STORE, 'readwrite');
+    const req = tx.objectStore(HL_STORE).delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function clearAllHighlights() {
+  const db = await openHL();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(HL_STORE, 'readwrite');
+    const req = tx.objectStore(HL_STORE).clear();
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function refreshHighlightsListBadge() {
+  try {
+    const n = await countHighlights();
+    const meta = document.getElementById('hlMeta');
+    if (meta) meta.textContent = n + ' clip' + (n === 1 ? '' : 's');
+    const dot = document.getElementById('highlightsDot');
+    if (dot && n > 0 && currentSection !== 'highlights') dot.style.display = '';
+  } catch(e) {}
+}
+
+async function refreshHighlightsList() {
+  try {
+    const n = await countHighlights();
+    document.getElementById('hlMeta').textContent = n + ' clip' + (n === 1 ? '' : 's');
+    document.getElementById('hlEmpty').style.display = n === 0 ? '' : 'none';
+    document.getElementById('hlPlayBtn').disabled = n === 0;
+    document.getElementById('hlPlayBtn').style.opacity = n === 0 ? '0.4' : '1';
+  } catch(e) {}
+}
+
+// ── Highlights playback engine ──
+let hlPlaying = false;
+let hlEntries = [];
+let hlIdx = 0;
+let hlBlobUrl = null;
+let hlStage = 'idle'; // 'title' | 'normal' | 'slomo' | 'final'
+let hlCumHome = 0, hlCumAway = 0;
+
+async function playHighlights() {
+  hlEntries = await getHighlights();
+  if (hlEntries.length === 0) return;
+  hlPlaying = true;
+  hlIdx = 0;
+  hlCumHome = 0; hlCumAway = 0;
+
+  document.getElementById('hlPlayBtn').style.display = 'none';
+  document.getElementById('hlStopBtn').style.display = '';
+  document.getElementById('hlEmpty').style.display = 'none';
+
+  // Compute final score for the intro card
+  let finalH = 0, finalA = 0;
+  hlEntries.forEach(e => {
+    if (e.type === 'goal' && e.team === 'home') finalH++;
+    if (e.type === 'goal' && e.team === 'away') finalA++;
+  });
+  const fs = document.getElementById('hlFinalScore');
+  fs.style.display = '';
+  fs.textContent = finalH + ' — ' + finalA;
+
+  showTitleCard();
+  setTimeout(() => {
+    if (!hlPlaying) return;
+    document.getElementById('hlTitleCard').classList.remove('visible');
+    playNextHighlight();
+  }, 4000);
+}
+
+function showTitleCard() {
+  document.getElementById('hlTitleCard').classList.add('visible');
+  const v = document.getElementById('hlVideo');
+  v.pause(); v.src = ''; v.classList.remove('visible');
+  document.getElementById('hlOverlay').style.display = 'none';
+}
+
+function stopHighlights() {
+  hlPlaying = false;
+  const v = document.getElementById('hlVideo');
+  if (v) {
+    v.pause(); v.onended = null; v.onseeked = null; v.oncanplay = null;
+    v.src = ''; v.classList.remove('visible');
+  }
+  if (hlBlobUrl) { URL.revokeObjectURL(hlBlobUrl); hlBlobUrl = null; }
+  const playBtn = document.getElementById('hlPlayBtn');
+  const stopBtn = document.getElementById('hlStopBtn');
+  if (playBtn) playBtn.style.display = '';
+  if (stopBtn) stopBtn.style.display = 'none';
+  const tc = document.getElementById('hlTitleCard');
+  if (tc) tc.classList.remove('visible');
+  const ov = document.getElementById('hlOverlay');
+  if (ov) ov.style.display = 'none';
+}
+
+function playNextHighlight() {
+  if (!hlPlaying) return;
+  if (hlIdx >= hlEntries.length) {
+    // Final card
+    showTitleCard();
+    setTimeout(() => {
+      stopHighlights();
+    }, 4000);
+    return;
+  }
+  const entry = hlEntries[hlIdx];
+
+  // Update cumulative score BEFORE the clip plays so overlay matches
+  if (entry.type === 'goal' && entry.team === 'home') hlCumHome++;
+  if (entry.type === 'goal' && entry.team === 'away') hlCumAway++;
+  document.getElementById('hlOvHome').textContent = hlCumHome;
+  document.getElementById('hlOvAway').textContent = hlCumAway;
+  const tag = document.getElementById('hlOvTag');
+  tag.classList.remove('goal','save','nearmiss','slomo');
+  tag.classList.add(entry.type);
+  tag.textContent = entry.type === 'goal' ? 'GOAL'
+                  : entry.type === 'save' ? 'GREAT SAVE' : 'NEAR MISS';
+  document.getElementById('hlOverlay').style.display = '';
+
+  if (hlBlobUrl) URL.revokeObjectURL(hlBlobUrl);
+  hlBlobUrl = URL.createObjectURL(entry.blob);
+
+  const v = document.getElementById('hlVideo');
+  v.classList.add('visible');
+  v.muted = true;
+  v.playbackRate = 1.0;
+  v.src = hlBlobUrl;
+
+  hlStage = 'normal';
+  v.oncanplay = () => {
+    v.oncanplay = null;
+    v.currentTime = 0;
+    v.play().catch(() => {});
+  };
+  v.onended = () => {
+    if (!hlPlaying) return;
+    if (hlStage === 'normal') {
+      // Play the slo-mo: last 5s at 0.5x
+      hlStage = 'slomo';
+      const slomoTag = document.getElementById('hlOvTag');
+      slomoTag.classList.remove('goal','save','nearmiss');
+      slomoTag.classList.add('slomo');
+      slomoTag.textContent = 'SLOW MOTION';
+      v.playbackRate = 0.5;
+      if (isFinite(v.duration)) v.currentTime = Math.max(0, v.duration - 5);
+      else v.currentTime = 0;
+      v.onseeked = () => { v.onseeked = null; v.play().catch(() => {}); };
+    } else {
+      // Done with this entry — move on
+      hlIdx++;
+      playNextHighlight();
+    }
+  };
+  v.load();
+}
+
+async function clearHighlightsConfirm() {
+  if (!confirm('Clear all highlights? This cannot be undone.')) return;
+  await clearAllHighlights();
+  stopHighlights();
+  refreshHighlightsList();
+}
+
+// ── Refresh popup: keep or remove existing highlights ──
+function showRefreshPopupIfNeeded() {
+  countHighlights().then(n => {
+    if (n > 0) {
+      highlightsEnabled = false; // don't add new clips until user decides
+      document.getElementById('qPopupRefreshCount').textContent = n;
+      document.getElementById('qPopupRefresh').classList.add('visible');
+    }
+    refreshHighlightsListBadge();
+  }).catch(() => {});
+}
+
+function resolveRefreshPopup(keep) {
+  document.getElementById('qPopupRefresh').classList.remove('visible');
+  if (!keep) {
+    clearAllHighlights().then(() => refreshHighlightsListBadge());
+  }
+  highlightsEnabled = true;
+}
+
+// ── Full-time popup: keep / watch / remove ──
+function showFullTimePopup() {
+  countHighlights().then(n => {
+    document.getElementById('qPopupFTCount').textContent = n;
+    document.getElementById('qPopupFT').classList.add('visible');
+  }).catch(() => {});
+}
+
+function resolveFTPopup(choice) {
+  document.getElementById('qPopupFT').classList.remove('visible');
+  if (choice === 'discard') {
+    clearAllHighlights().then(() => refreshHighlightsListBadge());
+  } else if (choice === 'watch') {
+    showSection('highlights');
+    setTimeout(() => playHighlights(), 300);
+  }
+  // 'keep' → just close
+}
+
+// Check for existing highlights on load
+document.addEventListener('DOMContentLoaded', showRefreshPopupIfNeeded);
 
 // ── Speech recognition ──
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1345,6 +1771,22 @@ function captureReplay(showGoalFirst) {
 
     if (replayUrl) URL.revokeObjectURL(replayUrl);
     replayUrl = URL.createObjectURL(chosen);
+
+    // Save to highlights (clone the blob so revoke/cleanup doesn't affect IDB copy)
+    if (highlightsEnabled) {
+      const reactionType = currentReactionType || 'goal';
+      const entry = {
+        type: reactionType,
+        blob: chosen,
+        timestamp: Date.now(),
+        team: null,
+        scoreAfter: null,
+      };
+      saveHighlight(entry).then(id => {
+        pendingHighlightId = (reactionType === 'goal') ? id : null;
+        refreshHighlightsListBadge();
+      }).catch(() => {});
+    }
 
     if (showGoalFirst) {
       document.getElementById('goalPopup').classList.add('visible');
@@ -1604,6 +2046,67 @@ function updateReplaySectionUI() {
   </div>
 </div>
 
+<!-- ── Highlights Section ── -->
+<div class="highlights-section" id="highlightsSection">
+  <div class="hl-stage" id="hlStage">
+    <video id="hlVideo" class="hl-video" playsinline></video>
+    <div class="hl-title-card" id="hlTitleCard">
+      <div class="hl-tag">★ MATCH HIGHLIGHTS ★</div>
+      <div class="hl-h1">SUBBUTEO</div>
+      <div class="hl-vs">
+        <span class="home">FLANDERS</span>
+        <span class="sep">VS</span>
+        <span class="away">PETERBOROUGH</span>
+      </div>
+      <div class="hl-final-score" id="hlFinalScore" style="display:none">0 — 0</div>
+    </div>
+    <div class="hl-overlay" id="hlOverlay" style="display:none">
+      <div class="hl-overlay-board">
+        <span class="hl-team-h">FLA</span>
+        <span class="hl-score" id="hlOvHome">0</span>
+        <span style="color:#666">—</span>
+        <span class="hl-score" id="hlOvAway">0</span>
+        <span class="hl-team-a">PET</span>
+      </div>
+      <div class="hl-overlay-tag" id="hlOvTag">GOAL</div>
+    </div>
+    <div class="hl-empty" id="hlEmpty" style="display:none">
+      NO HIGHLIGHTS YET — SCORE A GOAL OR TRIGGER A SAVE / NEAR MISS WHILE RECORDING
+    </div>
+  </div>
+  <div class="hl-controls">
+    <button class="primary" id="hlPlayBtn" onclick="playHighlights()">▶ PLAY HIGHLIGHTS</button>
+    <button id="hlStopBtn" onclick="stopHighlights()" style="display:none">STOP</button>
+    <button class="danger" onclick="clearHighlightsConfirm()">CLEAR ALL</button>
+    <div class="hl-meta" id="hlMeta">0 clips</div>
+  </div>
+</div>
+
+<!-- ── Refresh: keep or discard popup ── -->
+<div class="q-popup" id="qPopupRefresh">
+  <div class="q-box">
+    <div class="q-title">SAVED HIGHLIGHTS FOUND</div>
+    <div class="q-body" id="qPopupRefreshBody">You have <span id="qPopupRefreshCount">0</span> clips saved from a previous session. Keep them or remove them?</div>
+    <div class="q-btns">
+      <button class="keep" onclick="resolveRefreshPopup(true)">KEEP</button>
+      <button class="discard" onclick="resolveRefreshPopup(false)">REMOVE</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Full time: keep / watch / discard popup ── -->
+<div class="q-popup" id="qPopupFT">
+  <div class="q-box">
+    <div class="q-title">FULL TIME</div>
+    <div class="q-body">The match is over. <span id="qPopupFTCount">0</span> highlights captured.</div>
+    <div class="q-btns">
+      <button class="keep" onclick="resolveFTPopup('watch')">WATCH NOW</button>
+      <button onclick="resolveFTPopup('keep')">KEEP</button>
+      <button class="discard" onclick="resolveFTPopup('discard')">REMOVE</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Hamburger (always visible) ── -->
 <button class="hamburger-btn" onclick="openNav()" aria-label="Menu"><span></span><span></span><span></span></button>
 
@@ -1635,6 +2138,11 @@ function updateReplaySectionUI() {
     REPLAY CAM
     <span class="nav-item-dot" id="replayDot" style="display:none"></span>
   </button>
+  <button class="nav-item" id="navHighlights" onclick="showSection('highlights')">
+    <span class="nav-item-icon">&#x2728;</span>
+    HIGHLIGHTS
+    <span class="nav-item-dot" id="highlightsDot" style="display:none"></span>
+  </button>
   <div class="nav-footer">SUBBUTEO LIVE SYSTEM</div>
 </nav>
 
@@ -1647,18 +2155,22 @@ function showSection(section) {
   const frame = document.getElementById('commFrame');
   const matchSec = document.getElementById('matchSection');
   const replaySec = document.getElementById('replaySection');
+  const hlSec = document.getElementById('highlightsSection');
 
   // Hide all
-  [app, frame, matchSec, replaySec].forEach(el => {
+  [app, frame, matchSec, replaySec, hlSec].forEach(el => {
     el.style.opacity = '0';
     el.style.pointerEvents = 'none';
     el.style.zIndex = '0';
-    if (el === matchSec || el === replaySec) el.classList.remove('active');
+    if (el === matchSec || el === replaySec || el === hlSec) el.classList.remove('active');
   });
 
+  // Stop any running highlights if leaving that page
+  if (section !== 'highlights') stopHighlights();
+
   // Deactivate all nav
-  ['navCrowd','navComm','navMatch','navReplay'].forEach(id => document.getElementById(id).classList.remove('active'));
-  ['crowdDot','commDot','matchDot','replayDot'].forEach(id => document.getElementById(id).style.display = 'none');
+  ['navCrowd','navComm','navMatch','navReplay','navHighlights'].forEach(id => document.getElementById(id).classList.remove('active'));
+  ['crowdDot','commDot','matchDot','replayDot','highlightsDot'].forEach(id => document.getElementById(id).style.display = 'none');
 
   currentSection = section;
 
@@ -1681,6 +2193,11 @@ function showSection(section) {
     document.getElementById('navReplay').classList.add('active');
     document.getElementById('replayDot').style.display = replaySectionActive ? '' : 'none';
     populateReplayCamList();
+  } else if (section === 'highlights') {
+    hlSec.style.opacity = '1'; hlSec.style.pointerEvents = 'all'; hlSec.style.zIndex = '10';
+    hlSec.classList.add('active');
+    document.getElementById('navHighlights').classList.add('active');
+    refreshHighlightsList();
   }
   closeNav();
 }
@@ -1727,6 +2244,7 @@ function timerToggle() {
         document.getElementById('msStartBtn').textContent = 'START';
         document.getElementById('msStartBtn').className = 'ms-ctrl-btn primary';
         playWhistle();
+        setTimeout(showFullTimePopup, 1500);
       }
     }, 1000);
   } else {
