@@ -1157,11 +1157,28 @@ async function initGestureRecognizer() {
   });
 }
 
+function isBuiltInCamera(label) {
+  return /facetime|built.?in|integrated|internal/i.test(label);
+}
+
+async function getBuiltInDeviceId() {
+  await navigator.mediaDevices.getUserMedia({ video: true })
+    .then(s => s.getTracks().forEach(t => t.stop())).catch(() => {});
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const cams = devices.filter(d => d.kind === 'videoinput');
+  const builtIn = cams.find(c => isBuiltInCamera(c.label));
+  return builtIn ? builtIn.deviceId : null;
+}
+
 async function startGesture() {
   const label = document.getElementById('handLabel');
   label.textContent = 'Loading...';
   if (!gestureRecognizer) await initGestureRecognizer();
-  gestureStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+  const builtInId = await getBuiltInDeviceId();
+  const constraints = builtInId
+    ? { video: { deviceId: { exact: builtInId } } }
+    : { video: { facingMode: 'user' } };
+  gestureStream = await navigator.mediaDevices.getUserMedia(constraints);
   const video = document.getElementById('gestureVideo');
   video.srcObject = gestureStream;
   await new Promise(r => { video.onloadedmetadata = r; });
@@ -1303,7 +1320,6 @@ let replaySectionActive = false;
 
 async function populateReplayCamList() {
   const sel = document.getElementById('rsCamSelect');
-  // Request permission so labels appear
   await navigator.mediaDevices.getUserMedia({ video: true })
     .then(s => s.getTracks().forEach(t => t.stop())).catch(() => {});
   const devices = await navigator.mediaDevices.enumerateDevices();
@@ -1312,7 +1328,13 @@ async function populateReplayCamList() {
   sel.innerHTML = cams.map((c, i) =>
     `<option value="${c.deviceId}">${c.label || 'Camera ' + (i + 1)}</option>`
   ).join('');
-  if (current && cams.find(c => c.deviceId === current)) sel.value = current;
+  // If already set, keep it; otherwise auto-select the first external (non-built-in) camera
+  if (current && cams.find(c => c.deviceId === current)) {
+    sel.value = current;
+  } else {
+    const external = cams.find(c => !isBuiltInCamera(c.label));
+    if (external) sel.value = external.deviceId;
+  }
 }
 
 async function toggleReplaySection() {
