@@ -386,7 +386,7 @@ const CROWD_B64 = "//u0RAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 async function initAudio() {
   ctx = new (window.AudioContext || window.webkitAudioContext)();
   masterGain = ctx.createGain();
-  masterGain.gain.value = 0.75;
+  masterGain.gain.value = 1.5;
   masterGain.connect(ctx.destination);
 
   // Decode crowd MP3
@@ -399,7 +399,7 @@ async function initAudio() {
 function startCrowd() {
   if (!ctx || crowdSource) return;
   crowdGain = ctx.createGain();
-  crowdGain.gain.value = 0.85;
+  crowdGain.gain.value = 2.0;
   crowdGain.connect(masterGain);
 
   crowdSource = ctx.createBufferSource();
