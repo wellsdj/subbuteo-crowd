@@ -1377,11 +1377,11 @@ function playReplayClip() {
     video.play().catch(() => {});
     requestAnimationFrame(() => requestAnimationFrame(() => { video.style.opacity = '1'; }));
     video.onended = advance;
-    if (clip.skipEnd) {
-      const totalSecs = (clip.seekFromEnd || (isFinite(video.duration) ? video.duration : 10));
-      const playSecs = Math.max(0.5, totalSecs - (clip.skipStart || 0) - clip.skipEnd);
-      setTimeout(advance, (playSecs * 1000) / clip.rate);
-    }
+    // Universal 0.2s trim at the end of every clip
+    const skipEnd = (clip.skipEnd || 0) + 0.2;
+    const totalSecs = (clip.seekFromEnd || (isFinite(video.duration) ? video.duration : 10));
+    const playSecs = Math.max(0.3, totalSecs - (clip.skipStart || 0) - skipEnd);
+    setTimeout(advance, (playSecs * 1000) / clip.rate);
   };
 
   // Fade out, then seek/reset, then play
@@ -1699,6 +1699,7 @@ function showTitleCard() {
 
 function stopHighlights() {
   hlPlaying = false;
+  if (hlEndTrimTimer) { clearTimeout(hlEndTrimTimer); hlEndTrimTimer = null; }
   const v = document.getElementById('hlVideo');
   if (v) {
     v.pause(); v.onended = null; v.onseeked = null; v.oncanplay = null;
@@ -1747,6 +1748,7 @@ function playNextHighlight() {
     v.oncanplay = null;
     v.currentTime = 0;
     v.play().catch(() => {});
+    scheduleHlEndTrim(v);
   };
   v.onended = () => {
     if (!hlPlaying) return;
@@ -1813,7 +1815,24 @@ function startSloMo(v) {
   v.playbackRate = 0.5;
   if (isFinite(v.duration)) v.currentTime = Math.max(0, v.duration - 5);
   else v.currentTime = 0;
-  v.onseeked = () => { v.onseeked = null; v.play().catch(() => {}); };
+  v.onseeked = () => { v.onseeked = null; v.play().catch(() => {}); scheduleHlEndTrim(v); };
+}
+
+// Trigger v.onended ~0.2s before the natural end so the trailing
+// MediaRecorder glitch frames never make it on-screen.
+let hlEndTrimTimer = null;
+function scheduleHlEndTrim(v) {
+  if (hlEndTrimTimer) { clearTimeout(hlEndTrimTimer); hlEndTrimTimer = null; }
+  if (!isFinite(v.duration)) return;
+  const remaining = v.duration - v.currentTime - 0.2;
+  if (remaining <= 0.1) return;
+  const ms = (remaining * 1000) / (v.playbackRate || 1);
+  hlEndTrimTimer = setTimeout(() => {
+    hlEndTrimTimer = null;
+    if (!hlPlaying) return;
+    const handler = v.onended;
+    if (handler) { v.onended = null; v.pause(); handler(); }
+  }, ms);
 }
 
 async function clearHighlightsConfirm() {
