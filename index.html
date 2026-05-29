@@ -1591,11 +1591,11 @@ async function playHlGoalSound() {
   hlGoalGainNode = ctx.createGain();
   hlGoalGainNode.gain.setValueAtTime(2.5, ctx.currentTime);
   hlGoalGainNode.gain.setValueAtTime(2.5, ctx.currentTime + 0.1);
-  hlGoalGainNode.gain.linearRampToValueAtTime(0.0, ctx.currentTime + 8);
+  hlGoalGainNode.gain.linearRampToValueAtTime(0.0, ctx.currentTime + 16);
   src.connect(hlGoalGainNode);
   hlGoalGainNode.connect(ctx.destination);
   src.start();
-  src.stop(ctx.currentTime + 8);
+  src.stop(ctx.currentTime + 16);
 }
 
 
