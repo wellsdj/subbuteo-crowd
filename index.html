@@ -446,6 +446,10 @@
     border-bottom: 1px solid rgba(0,232,122,0.12);
     display: flex; align-items: center; justify-content: center;
     gap: 10px; font-family: 'Inter', sans-serif;
+    transition: opacity 0.3s, transform 0.3s;
+  }
+  .match-banner.hidden {
+    opacity: 0; transform: translateY(-100%); pointer-events: none;
   }
   .mb-team { font-size: 10px; font-weight: 700; letter-spacing: 3px; }
   .mb-team.home { color: var(--accent); }
@@ -527,7 +531,7 @@
     transition: opacity 0.2s;
     background: #000;
     display: flex; flex-direction: column;
-    padding-top: 36px;
+    padding-top: 0;
   }
   .highlights-section.active { opacity: 1; pointer-events: all; z-index: 10; }
   .hl-stage {
@@ -684,6 +688,14 @@
     30%  { transform: scale(1.8); color: #ffd700; text-shadow: 0 0 40px #ffd700; }
     100% { transform: scale(1); color: #fff; }
   }
+
+  /* ── Inter-play transition wipe ── */
+  .hl-transition {
+    position: absolute; inset: 0; background: #000;
+    opacity: 0; pointer-events: none; z-index: 7;
+    transition: opacity 0.5s ease;
+  }
+  .hl-transition.visible { opacity: 1; }
 
   /* ── GOAL! flash ── */
   .hl-goal-flash {
@@ -1733,9 +1745,19 @@ function playNextHighlight() {
         startSloMo(v);
       }
     } else {
-      // Done with slo-mo — move on
+      // Done with slo-mo — fade to black, advance, fade back in
       hlIdx++;
-      playNextHighlight();
+      const trans = document.getElementById('hlTransition');
+      if (hlIdx < hlEntries.length) {
+        trans.classList.add('visible');
+        setTimeout(() => {
+          if (!hlPlaying) return;
+          playNextHighlight();
+          setTimeout(() => { trans.classList.remove('visible'); }, 50);
+        }, 500);
+      } else {
+        playNextHighlight();
+      }
     }
   };
   v.load();
@@ -2339,6 +2361,7 @@ function updateReplaySectionUI() {
       <span class="hl-bb-score" id="hlBoardAway">0</span>
       <span class="hl-bb-away">PETERBOROUGH</span>
     </div>
+    <div class="hl-transition" id="hlTransition"></div>
     <div class="hl-goal-flash" id="hlGoalFlash">
       <div class="hl-goal-rays"></div>
       <span class="hl-goal-text" id="hlGoalText">GOAL!</span>
@@ -2440,6 +2463,10 @@ function showSection(section) {
 
   // Stop any running highlights if leaving that page
   if (section !== 'highlights') stopHighlights();
+
+  // Hide the top scoreboard/timer banner only on highlights
+  const banner = document.getElementById('matchBanner');
+  if (banner) banner.classList.toggle('hidden', section === 'highlights');
 
   // Deactivate all nav
   ['navCrowd','navComm','navMatch','navReplay','navHighlights'].forEach(id => document.getElementById(id).classList.remove('active'));
