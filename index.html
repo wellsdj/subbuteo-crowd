@@ -1308,7 +1308,7 @@ let replaySeqIdx = 0;
 let replayTimerHandle = null;
 
 const REPLAY_SEQ = [
-  { label: 'FULL REPLAY', rate: 1.0,  seekFromEnd: null, skipStart: 0 },
+  { label: 'FULL REPLAY', rate: 1.0,  seekFromEnd: 10,   skipStart: 0 },
   { label: 'LAST 5s',     rate: 1.0,  seekFromEnd: 5,    skipStart: 1 },
   { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5,    skipStart: 1 },
   { label: 'SUPER SLOW',  rate: 0.25, seekFromEnd: 3,    skipStart: 1 },
@@ -1986,7 +1986,7 @@ const REPLAY_CHUNK_MS = 500;
 // segment is a complete, valid WebM (proper duration, plays correctly,
 // can be seeked). We keep the last complete segment and the in-progress
 // one. On goal: stop current, get a complete WebM, hand it to replay.
-const SEGMENT_MS = 12000;
+const SEGMENT_MS = 22000;
 let replayMime = '';
 let replaySegmentTimer = null;
 let replayPrevBlob = null;       // last completed segment
