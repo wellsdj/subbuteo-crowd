@@ -1989,6 +1989,7 @@ const REPLAY_CHUNK_MS = 500;
 const SEGMENT_MS = 22000;
 let replayMime = '';
 let replaySegmentTimer = null;
+let replaySegmentStartTime = 0;   // when current segment started
 let replayPrevBlob = null;       // last completed segment
 let replayCurrChunks = [];       // current in-progress segment chunks
 let replayOnFinalize = null;     // callback for goal-triggered stop
@@ -2003,6 +2004,7 @@ function startReplayRecorder(stream) {
 
 function startReplaySegment(stream) {
   replayCurrChunks = [];
+  replaySegmentStartTime = Date.now();
   try {
     replayRecorder = new MediaRecorder(stream, replayMime ? { mimeType: replayMime } : {});
   } catch(e) { replayRecorder = null; return; }
@@ -2052,8 +2054,12 @@ function captureReplay(showGoalFirst) {
   if (replaySegmentTimer) { clearTimeout(replaySegmentTimer); replaySegmentTimer = null; }
 
   const handleBlob = (currBlob) => {
+    const segmentAge = Date.now() - replaySegmentStartTime;
     let chosen = null;
-    if (currBlob && currBlob.size > 200000) chosen = currBlob;
+    // Only use the current (in-progress) segment if it has been recording
+    // for at least 18s — otherwise it's too short and the previous full
+    // 22s segment gives much better coverage of the build-up.
+    if (currBlob && segmentAge >= 18000) chosen = currBlob;
     else if (replayPrevBlob) chosen = replayPrevBlob;
     else if (currBlob) chosen = currBlob;
 
