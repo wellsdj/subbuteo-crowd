@@ -1346,7 +1346,7 @@ function updateReplayUI(idx) {
   const seq = activeReplaySeq;
   document.getElementById('replayLabel').textContent = seq[idx].label;
   const rateLabels = { 1.0: '1×', 0.5: '0.5×', 0.25: '0.25×' };
-  const secs = seq[idx].seekFromEnd ? seq[idx].seekFromEnd - (seq[idx].skipStart || 0) - 1 : '—';
+  const secs = seq[idx].seekFromEnd ? seq[idx].seekFromEnd - (seq[idx].skipStart || 0) - (seq[idx].skipEnd || 0) : '—';
   document.getElementById('replayTimestamp').textContent =
     (seq[idx].seekFromEnd ? secs + 's' : 'full') + ' · ' + (rateLabels[seq[idx].rate] || seq[idx].rate + '×');
   // Show only as many pips as the active sequence has
