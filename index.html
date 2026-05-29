@@ -1654,6 +1654,14 @@ async function playHlGoalSound() {
 
 
 let hlPlaying = false;
+let hlMicMuted = false;
+function toggleHlMic() {
+  hlMicMuted = !hlMicMuted;
+  const v = document.getElementById('hlVideo');
+  if (v) v.muted = hlMicMuted;
+  const btn = document.getElementById('hlMicBtn');
+  if (btn) btn.textContent = hlMicMuted ? '🔇 MIC OFF' : '🎙 MIC ON';
+}
 let hlEntries = [];
 let hlIdx = 0;
 let hlBlobUrl = null;
@@ -1744,7 +1752,8 @@ function playNextHighlight() {
 
   const v = document.getElementById('hlVideo');
   v.classList.add('visible');
-  v.muted = true;
+  v.muted = hlMicMuted;
+  v.volume = 0.18;
   v.playbackRate = 1.0;
   v.src = hlBlobUrl;
 
@@ -2379,6 +2388,15 @@ async function startReplaySectionCamera() {
     alert('Could not open replay camera: ' + e.message);
     return;
   }
+  // Try to add the microphone so highlights can play back ambient commentary
+  try {
+    const micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+    });
+    micStream.getAudioTracks().forEach(t => replaySectionStream.addTrack(t));
+  } catch(e) {
+    // Mic refused or unavailable — replays stay video-only.
+  }
   // Feed both the full-screen tab preview and the inline panel preview
   const tabVid = document.getElementById('rsCamVideo');
   tabVid.srcObject = replaySectionStream;
@@ -2540,6 +2558,7 @@ function updateReplaySectionUI() {
   <div class="hl-controls">
     <button class="primary" id="hlPlayBtn" onclick="playHighlights()">▶ PLAY HIGHLIGHTS</button>
     <button id="hlStopBtn" onclick="stopHighlights()" style="display:none">STOP</button>
+    <button id="hlMicBtn" onclick="toggleHlMic()">🎙 MIC ON</button>
     <button class="danger" onclick="clearHighlightsConfirm()">CLEAR ALL</button>
     <div class="hl-meta" id="hlMeta">0 clips</div>
   </div>
