@@ -1403,6 +1403,16 @@ function showSaveReplay(type) {
     captureReplay(false);
   }
 }
+
+// Open-palm gesture: silently capture the last ~20s into highlights
+// — no sound, no popup, no in-game replay. Just bookmark the moment.
+function showMoment() {
+  replayIsGoal = false;
+  currentReactionType = 'moment';
+  if (replaySectionActive || replayChunks.length > 0) {
+    captureReplay(false, true);
+  }
+}
 function dismissGoal() {
   document.getElementById('goalPopup').classList.remove('visible');
   if (replayTimerHandle) {
@@ -1705,14 +1715,25 @@ function playNextHighlight() {
   v.src = hlBlobUrl;
 
   hlStage = 'normal';
+  const isMoment = entry.type === 'moment';
   v.oncanplay = () => {
     v.oncanplay = null;
-    v.currentTime = 0;
+    // Moments: only play the last 5 seconds (no build-up needed)
+    if (isMoment && isFinite(v.duration)) {
+      v.currentTime = Math.max(0, v.duration - 5);
+    } else {
+      v.currentTime = 0;
+    }
     v.play().catch(() => {});
   };
   v.onended = () => {
     if (!hlPlaying) return;
     if (hlStage === 'normal') {
+      if (isMoment) {
+        // No slo-mo, no sound — go straight to the inter-play transition
+        advanceHighlight(v);
+        return;
+      }
       if (entry.type === 'goal') {
         // Flash "GOAL!" in team color, then increment scoreboard, then slo-mo
         const flash = document.getElementById('hlGoalFlash');
@@ -1746,21 +1767,28 @@ function playNextHighlight() {
       }
     } else {
       // Done with slo-mo — fade to black, advance, fade back in
-      hlIdx++;
-      const trans = document.getElementById('hlTransition');
-      if (hlIdx < hlEntries.length) {
-        trans.classList.add('visible');
-        setTimeout(() => {
-          if (!hlPlaying) return;
-          playNextHighlight();
-          setTimeout(() => { trans.classList.remove('visible'); }, 50);
-        }, 500);
-      } else {
-        playNextHighlight();
-      }
+      advanceHighlight(v);
     }
   };
   v.load();
+}
+
+function advanceHighlight(v) {
+  hlIdx++;
+  const isLast = hlIdx >= hlEntries.length;
+  const trans = document.getElementById('hlTransition');
+  if (isLast) {
+    // Final clip just ended — full-time whistle, then outro card
+    playWhistle();
+    playNextHighlight();
+    return;
+  }
+  trans.classList.add('visible');
+  setTimeout(() => {
+    if (!hlPlaying) return;
+    playNextHighlight();
+    setTimeout(() => { trans.classList.remove('visible'); }, 50);
+  }, 500);
 }
 
 function startSloMo(v) {
@@ -1923,6 +1951,7 @@ const GESTURE_MAP = {
   'Victory':     'nearmiss',
   'Pointing_Up':  'nearmiss',
   'Thumb_Up':    'save',
+  'Open_Palm':   'moment',
 };
 
 async function initGestureRecognizer() {
@@ -2050,7 +2079,7 @@ function stopReplayRecorder() {
   replayCurrChunks = [];
 }
 
-function captureReplay(showGoalFirst) {
+function captureReplay(showGoalFirst, silent) {
   if (replaySegmentTimer) { clearTimeout(replaySegmentTimer); replaySegmentTimer = null; }
 
   const handleBlob = (currBlob) => {
@@ -2086,6 +2115,12 @@ function captureReplay(showGoalFirst) {
         pendingHighlightId = (reactionType === 'goal') ? id : null;
         refreshHighlightsListBadge();
       }).catch(() => {});
+    }
+
+    if (silent) {
+      // Moment bookmark — just saved to IDB; no popup, no replay, no sound.
+      if (replaySectionStream && replaySectionActive) startReplaySegment(replaySectionStream);
+      return;
     }
 
     if (showGoalFirst) {
@@ -2140,8 +2175,12 @@ function runGestureLoop() {
           if (reaction) {
             lastGestureTime = now;
             if (!ctx) initAudio();
-            triggerReaction(reaction, null);
-            if (reaction === 'goal') { showGoalPopup(); stopGesture(); }
+            if (reaction === 'moment') {
+              showMoment();
+            } else {
+              triggerReaction(reaction, null);
+              if (reaction === 'goal') { showGoalPopup(); stopGesture(); }
+            }
           }
         }
       }
