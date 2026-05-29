@@ -1430,14 +1430,19 @@ function showSaveReplay(type) {
   }
 }
 
-// VAR review button (camera screen) — instant replay of last 10s minus 1s
-// at the end. No sound, no highlights save.
+// VAR review button (camera screen) — instant replay of the last 10s
+// ending at the click. No sound, no highlights save.
 function triggerVAR() {
-  if (!replaySectionActive && replayChunks.length === 0) return;
+  if (!replaySectionActive) return;
   replayIsGoal = false;
   currentReactionType = 'var';
   activeReplaySeq = VAR_SEQ;
-  captureReplay(false);
+  captureVarBlob((blob) => {
+    if (!blob) return;
+    if (replayUrl) URL.revokeObjectURL(replayUrl);
+    replayUrl = URL.createObjectURL(blob);
+    startReplaySequence();
+  });
 }
 
 function dismissGoal() {
@@ -2064,6 +2069,89 @@ function startReplayRecorder(stream) {
     .find(m => MediaRecorder.isTypeSupported(m)) || '';
   replayPrevBlob = null;
   startReplaySegment(stream);
+  startVarRecorder(stream);
+}
+
+// ── Dual-phase recorders for VAR ──
+// One single recorder leaves a gap: if VAR is clicked just after a cycle
+// boundary, the in-progress segment is too short. We run TWO recorders
+// of the same cycle length, offset by half a cycle, so at any moment at
+// least one of them has been running for >= cycle/2 seconds. With a 22s
+// cycle and 11s offset, the older recorder always has >= 11s of fresh
+// footage ending at the click moment.
+const VAR_SEGMENT_MS = 22000;
+const VAR_PHASE_OFFSET_MS = 11000;
+const varRec = [
+  { recorder: null, timer: null, startTime: 0, currChunks: [], onFinalize: null },
+  { recorder: null, timer: null, startTime: 0, currChunks: [], onFinalize: null },
+];
+
+function startVarRecorder(stream) {
+  stopVarRecorder();
+  startVarSegment(stream, 0);
+  setTimeout(() => {
+    if (replaySectionStream && replaySectionActive) startVarSegment(replaySectionStream, 1);
+  }, VAR_PHASE_OFFSET_MS);
+}
+function startVarSegment(stream, slot) {
+  const s = varRec[slot];
+  s.currChunks = [];
+  s.startTime = Date.now();
+  try {
+    s.recorder = new MediaRecorder(stream, replayMime ? { mimeType: replayMime } : {});
+  } catch(e) { s.recorder = null; return; }
+  s.recorder.ondataavailable = e => {
+    if (e.data && e.data.size > 0) s.currChunks.push(e.data);
+  };
+  s.recorder.onstop = () => {
+    const blob = s.currChunks.length
+      ? new Blob(s.currChunks, { type: replayMime || 'video/webm' })
+      : null;
+    if (s.onFinalize) {
+      const cb = s.onFinalize;
+      s.onFinalize = null;
+      cb(blob);
+    } else if (replaySectionStream && replaySectionActive) {
+      startVarSegment(replaySectionStream, slot);
+    }
+  };
+  s.recorder.start();
+  s.timer = setTimeout(() => {
+    if (s.recorder && s.recorder.state === 'recording') {
+      try { s.recorder.stop(); } catch(e) {}
+    }
+  }, VAR_SEGMENT_MS);
+}
+function stopVarRecorder() {
+  for (const s of varRec) {
+    if (s.timer) { clearTimeout(s.timer); s.timer = null; }
+    s.onFinalize = null;
+    if (s.recorder && s.recorder.state !== 'inactive') {
+      try { s.recorder.stop(); } catch(e) {}
+    }
+    s.recorder = null;
+    s.currChunks = [];
+  }
+}
+// Pick whichever recorder has been running longest, stop it, hand the
+// finalized WebM to the callback. Restart that slot afterwards.
+function captureVarBlob(cb) {
+  const now = Date.now();
+  let pick = -1, oldest = -1;
+  for (let i = 0; i < varRec.length; i++) {
+    const s = varRec[i];
+    if (!s.recorder || s.recorder.state !== 'recording') continue;
+    const age = now - s.startTime;
+    if (age > oldest) { oldest = age; pick = i; }
+  }
+  if (pick < 0) { cb(null); return; }
+  const s = varRec[pick];
+  if (s.timer) { clearTimeout(s.timer); s.timer = null; }
+  s.onFinalize = (blob) => {
+    if (replaySectionStream && replaySectionActive) startVarSegment(replaySectionStream, pick);
+    cb(blob);
+  };
+  try { s.recorder.stop(); } catch(e) { s.onFinalize = null; cb(null); }
 }
 
 function startReplaySegment(stream) {
@@ -2112,6 +2200,7 @@ function stopReplayRecorder() {
   }
   replayRecorder = null;
   replayCurrChunks = [];
+  stopVarRecorder();
 }
 
 function captureReplay(showGoalFirst, silent) {
@@ -2120,20 +2209,11 @@ function captureReplay(showGoalFirst, silent) {
   const handleBlob = (currBlob) => {
     const segmentAge = Date.now() - replaySegmentStartTime;
     let chosen = null;
-    // For VAR: always prefer the current in-progress segment because the
-    // user wants the moments right before they clicked the button —
-    // even if curr is short, that's what they want to see.
-    // For other captures (goal/save/nearmiss): use the previous full segment
-    // unless the current one already has 18+s of build-up footage.
-    const isVAR = currentReactionType === 'var';
-    if (isVAR) {
-      if (currBlob) chosen = currBlob;
-      else if (replayPrevBlob) chosen = replayPrevBlob;
-    } else {
-      if (currBlob && segmentAge >= 18000) chosen = currBlob;
-      else if (replayPrevBlob) chosen = replayPrevBlob;
-      else if (currBlob) chosen = currBlob;
-    }
+    // Use the previous full 22s segment unless the current one already
+    // has 18+s of build-up footage.
+    if (currBlob && segmentAge >= 18000) chosen = currBlob;
+    else if (replayPrevBlob) chosen = replayPrevBlob;
+    else if (currBlob) chosen = currBlob;
 
     if (!chosen) {
       if (showGoalFirst) document.getElementById('goalPopup').classList.add('visible');
@@ -2145,7 +2225,7 @@ function captureReplay(showGoalFirst, silent) {
     replayUrl = URL.createObjectURL(chosen);
 
     // Save to highlights (clone the blob so revoke/cleanup doesn't affect IDB copy)
-    if (highlightsEnabled && currentReactionType !== 'var') {
+    if (highlightsEnabled) {
       const reactionType = currentReactionType || 'goal';
       const entry = {
         type: reactionType,
@@ -2173,9 +2253,6 @@ function captureReplay(showGoalFirst, silent) {
         document.getElementById('goalPopup').classList.remove('visible');
         startReplaySequence();
       }, 10000);
-    } else if (currentReactionType === 'var') {
-      // VAR review — no delay, go straight to the replay
-      startReplaySequence();
     } else {
       // Save/nearmiss: show replay immediately after a short 5s pause
       replayTimerHandle = setTimeout(() => {
