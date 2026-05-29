@@ -1326,10 +1326,10 @@ let replaySeqIdx = 0;
 let replayTimerHandle = null;
 
 const REPLAY_SEQ = [
-  { label: 'FULL REPLAY', rate: 1.0,  seekFromEnd: 10,   skipStart: 0 },
-  { label: 'LAST 5s',     rate: 1.0,  seekFromEnd: 5,    skipStart: 1 },
-  { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5,    skipStart: 1 },
-  { label: 'SUPER SLOW',  rate: 0.25, seekFromEnd: 3,    skipStart: 1 },
+  { label: 'FULL REPLAY', rate: 1.0,  seekFromEnd: 10, skipStart: 0 },
+  { label: 'LAST 5s',     rate: 1.0,  seekFromEnd: 5,  skipStart: 0 },
+  { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5,  skipStart: 0 },
+  { label: 'SUPER SLOW',  rate: 0.25, seekFromEnd: 3,  skipStart: 0 },
 ];
 
 const SAVE_REPLAY_SEQ = [
@@ -1337,7 +1337,7 @@ const SAVE_REPLAY_SEQ = [
   { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5, skipStart: 0 },
 ];
 const VAR_SEQ = [
-  { label: 'VAR REVIEW',  rate: 1.0,  seekFromEnd: 10, skipStart: 0, skipEnd: 1 },
+  { label: 'VAR REVIEW',  rate: 1.0,  seekFromEnd: 10, skipStart: 0 },
 ];
 
 let activeReplaySeq = REPLAY_SEQ;
@@ -1440,15 +1440,6 @@ function triggerVAR() {
   captureReplay(false);
 }
 
-// Open-palm gesture: silently capture the last ~20s into highlights
-// — no sound, no popup, no in-game replay. Just bookmark the moment.
-function showMoment() {
-  replayIsGoal = false;
-  currentReactionType = 'moment';
-  if (replaySectionActive || replayChunks.length > 0) {
-    captureReplay(false, true);
-  }
-}
 function dismissGoal() {
   document.getElementById('goalPopup').classList.remove('visible');
   if (replayTimerHandle) {
@@ -1752,25 +1743,14 @@ function playNextHighlight() {
   v.src = hlBlobUrl;
 
   hlStage = 'normal';
-  const isMoment = entry.type === 'moment';
   v.oncanplay = () => {
     v.oncanplay = null;
-    // Moments: only play the last 5 seconds (no build-up needed)
-    if (isMoment && isFinite(v.duration)) {
-      v.currentTime = Math.max(0, v.duration - 5);
-    } else {
-      v.currentTime = 0;
-    }
+    v.currentTime = 0;
     v.play().catch(() => {});
   };
   v.onended = () => {
     if (!hlPlaying) return;
     if (hlStage === 'normal') {
-      if (isMoment) {
-        // No slo-mo, no sound — go straight to the inter-play transition
-        advanceHighlight(v);
-        return;
-      }
       if (entry.type === 'goal') {
         // Flash "GOAL!" in team color, then increment scoreboard, then slo-mo
         const flash = document.getElementById('hlGoalFlash');
@@ -1988,7 +1968,6 @@ const GESTURE_MAP = {
   'Victory':     'nearmiss',
   'Pointing_Up':  'nearmiss',
   'Thumb_Up':    'save',
-  'Open_Palm':   'moment',
 };
 
 async function initGestureRecognizer() {
@@ -2122,12 +2101,20 @@ function captureReplay(showGoalFirst, silent) {
   const handleBlob = (currBlob) => {
     const segmentAge = Date.now() - replaySegmentStartTime;
     let chosen = null;
-    // Only use the current (in-progress) segment if it has been recording
-    // for at least 18s — otherwise it's too short and the previous full
-    // 22s segment gives much better coverage of the build-up.
-    if (currBlob && segmentAge >= 18000) chosen = currBlob;
-    else if (replayPrevBlob) chosen = replayPrevBlob;
-    else if (currBlob) chosen = currBlob;
+    // For VAR: always prefer the current in-progress segment because the
+    // user wants the moments right before they clicked the button —
+    // even if curr is short, that's what they want to see.
+    // For other captures (goal/save/nearmiss): use the previous full segment
+    // unless the current one already has 18+s of build-up footage.
+    const isVAR = currentReactionType === 'var';
+    if (isVAR) {
+      if (currBlob) chosen = currBlob;
+      else if (replayPrevBlob) chosen = replayPrevBlob;
+    } else {
+      if (currBlob && segmentAge >= 18000) chosen = currBlob;
+      else if (replayPrevBlob) chosen = replayPrevBlob;
+      else if (currBlob) chosen = currBlob;
+    }
 
     if (!chosen) {
       if (showGoalFirst) document.getElementById('goalPopup').classList.add('visible');
@@ -2215,12 +2202,8 @@ function runGestureLoop() {
           if (reaction) {
             lastGestureTime = now;
             if (!ctx) initAudio();
-            if (reaction === 'moment') {
-              showMoment();
-            } else {
-              triggerReaction(reaction, null);
-              if (reaction === 'goal') { showGoalPopup(); stopGesture(); }
-            }
+            triggerReaction(reaction, null);
+            if (reaction === 'goal') { showGoalPopup(); stopGesture(); }
           }
         }
       }
