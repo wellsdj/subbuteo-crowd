@@ -1836,7 +1836,8 @@ function scheduleHlEndTrim(v) {
     hlEndTrimTimer = null;
     if (!hlPlaying) return;
     const handler = v.onended;
-    if (handler) { v.onended = null; v.pause(); handler(); }
+    v.pause();
+    if (handler) handler();
   }, ms);
 }
 
