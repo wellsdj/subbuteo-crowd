@@ -1413,7 +1413,7 @@ function showGoalPopup() {
   replayIsGoal = true;
   currentReactionType = 'goal';
   activeReplaySeq = REPLAY_SEQ;
-  if (replaySectionActive || replayChunks.length > 0) {
+  if (replaySectionActive) {
     captureReplay(true);
   } else {
     document.getElementById('goalPopup').classList.add('visible');
@@ -1424,7 +1424,7 @@ function showSaveReplay(type) {
   replayIsGoal = false;
   currentReactionType = type || 'save';
   activeReplaySeq = SAVE_REPLAY_SEQ;
-  if (replaySectionActive || replayChunks.length > 0) {
+  if (replaySectionActive) {
     captureReplay(false);
   }
 }
@@ -2034,31 +2034,17 @@ async function startGesture() {
 }
 
 
-// ── Replay ring buffer ──
-let replayRecorder = null;
-let replayChunks = [];
-let replayInitChunk = null;
-const REPLAY_DURATION_MS = 12000; // 12s buffer, show last 10s
-const REPLAY_CHUNK_MS = 500;
-
-// Rolling-segment approach: every 12s, stop+restart the recorder so each
-// segment is a complete, valid WebM (proper duration, plays correctly,
-// can be seeked). We keep the last complete segment and the in-progress
-// one. On goal: stop current, get a complete WebM, hand it to replay.
-const SEGMENT_MS = 22000;
+// ── Replay capture ──
+// Both the instant replay and VAR use the SAME dual-phase recorder pair
+// (defined below). Stopping the longest-running recorder yields a WebM that
+// ends EXACTLY at the trigger moment, so the goal/save is always the last
+// thing on screen — never cut off before it happens.
 let replayMime = '';
-let replaySegmentTimer = null;
-let replaySegmentStartTime = 0;   // when current segment started
-let replayPrevBlob = null;       // last completed segment
-let replayCurrChunks = [];       // current in-progress segment chunks
-let replayOnFinalize = null;     // callback for goal-triggered stop
 
 function startReplayRecorder(stream) {
   stopReplayRecorder();
   replayMime = ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm','video/mp4']
     .find(m => MediaRecorder.isTypeSupported(m)) || '';
-  replayPrevBlob = null;
-  startReplaySegment(stream);
   startVarRecorder(stream);
 }
 
@@ -2144,77 +2130,26 @@ function captureVarBlob(cb) {
   try { s.recorder.stop(); } catch(e) { s.onFinalize = null; cb(null); }
 }
 
-function startReplaySegment(stream) {
-  replayCurrChunks = [];
-  replaySegmentStartTime = Date.now();
-  try {
-    replayRecorder = new MediaRecorder(stream, replayMime ? { mimeType: replayMime } : {});
-  } catch(e) { replayRecorder = null; return; }
-
-  replayRecorder.ondataavailable = e => {
-    if (e.data && e.data.size > 0) replayCurrChunks.push(e.data);
-  };
-
-  replayRecorder.onstop = () => {
-    const blob = replayCurrChunks.length
-      ? new Blob(replayCurrChunks, { type: replayMime || 'video/webm' })
-      : null;
-
-    if (replayOnFinalize) {
-      // Goal-triggered stop: hand the blob to the replay flow
-      const cb = replayOnFinalize;
-      replayOnFinalize = null;
-      cb(blob);
-    } else if (blob) {
-      // Timer-triggered rotation: save as previous, start a new segment
-      replayPrevBlob = blob;
-      if (replaySectionStream && replaySectionActive) {
-        startReplaySegment(replaySectionStream);
-      }
-    }
-  };
-
-  replayRecorder.start();
-  replaySegmentTimer = setTimeout(() => {
-    if (replayRecorder && replayRecorder.state === 'recording') {
-      try { replayRecorder.stop(); } catch(e) {}
-    }
-  }, SEGMENT_MS);
-}
-
 function stopReplayRecorder() {
-  if (replaySegmentTimer) { clearTimeout(replaySegmentTimer); replaySegmentTimer = null; }
-  replayOnFinalize = null;
-  if (replayRecorder && replayRecorder.state !== 'inactive') {
-    try { replayRecorder.stop(); } catch(e) {}
-  }
-  replayRecorder = null;
-  replayCurrChunks = [];
   stopVarRecorder();
 }
 
+// Capture the footage ending EXACTLY at the trigger moment using the
+// dual-phase recorder pair (same as VAR). captureVarBlob stops whichever
+// recorder has been running longest and hands back a WebM whose final frame
+// is the trigger instant — so the goal/save is always shown, never cut off.
 function captureReplay(showGoalFirst, silent) {
-  if (replaySegmentTimer) { clearTimeout(replaySegmentTimer); replaySegmentTimer = null; }
-
-  const handleBlob = (currBlob) => {
-    const segmentAge = Date.now() - replaySegmentStartTime;
-    let chosen = null;
-    // Use the previous full 22s segment unless the current one already
-    // has 18+s of build-up footage.
-    if (currBlob && segmentAge >= 18000) chosen = currBlob;
-    else if (replayPrevBlob) chosen = replayPrevBlob;
-    else if (currBlob) chosen = currBlob;
-
+  captureVarBlob((chosen) => {
     if (!chosen) {
       if (showGoalFirst) document.getElementById('goalPopup').classList.add('visible');
-      if (replaySectionStream && replaySectionActive) startReplaySegment(replaySectionStream);
       return;
     }
 
     if (replayUrl) URL.revokeObjectURL(replayUrl);
     replayUrl = URL.createObjectURL(chosen);
 
-    // Save to highlights (clone the blob so revoke/cleanup doesn't affect IDB copy)
+    // Save to highlights (same blob ending at the trigger, so the reel
+    // also runs all the way up to the goal/save).
     if (highlightsEnabled) {
       const reactionType = currentReactionType || 'goal';
       const entry = {
@@ -2230,11 +2165,7 @@ function captureReplay(showGoalFirst, silent) {
       }).catch(() => {});
     }
 
-    if (silent) {
-      // Moment bookmark — just saved to IDB; no popup, no replay, no sound.
-      if (replaySectionStream && replaySectionActive) startReplaySegment(replaySectionStream);
-      return;
-    }
+    if (silent) return; // Moment bookmark — saved to IDB only, no popup/replay.
 
     if (showGoalFirst) {
       document.getElementById('goalPopup').classList.add('visible');
@@ -2244,22 +2175,13 @@ function captureReplay(showGoalFirst, silent) {
         startReplaySequence();
       }, 10000);
     } else {
-      // Save/nearmiss: show replay immediately after a short 5s pause
+      // Save/nearmiss: show replay after a short 5s pause
       replayTimerHandle = setTimeout(() => {
         replayTimerHandle = null;
         startReplaySequence();
       }, 5000);
     }
-
-    if (replaySectionStream && replaySectionActive) startReplaySegment(replaySectionStream);
-  };
-
-  if (replayRecorder && replayRecorder.state === 'recording') {
-    replayOnFinalize = handleBlob;
-    try { replayRecorder.stop(); } catch(e) { handleBlob(null); }
-  } else {
-    handleBlob(null);
-  }
+  });
 }
 
 function stopGesture() {

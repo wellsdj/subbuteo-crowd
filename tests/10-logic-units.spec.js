@@ -122,9 +122,15 @@ test.describe('Pure logic units', () => {
     expect(score).toBe(0);
   });
 
-  test('SEGMENT_MS is 22000', async ({ page }) => {
+  test('VAR_SEGMENT_MS is 22000', async ({ page }) => {
     await gotoApp(page);
-    const val = await page.evaluate(() => SEGMENT_MS);
+    const val = await page.evaluate(() => VAR_SEGMENT_MS);
     expect(val).toBe(22000);
+  });
+
+  test('VAR_PHASE_OFFSET_MS is 11000', async ({ page }) => {
+    await gotoApp(page);
+    const val = await page.evaluate(() => VAR_PHASE_OFFSET_MS);
+    expect(val).toBe(11000);
   });
 });
