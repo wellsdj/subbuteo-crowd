@@ -288,6 +288,23 @@
     box-shadow: 0 0 12px var(--accent-glow);
   }
   .panel-status-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .var-btn {
+    margin-top: 6px;
+    border: 2px solid #ffd700;
+    background: linear-gradient(180deg, rgba(255,215,0,0.15), rgba(255,140,0,0.15));
+    color: #ffd700;
+    font-family: 'Black Ops One', 'Anton', sans-serif;
+    font-size: 14px; letter-spacing: 6px;
+    padding: 8px 22px; border-radius: 3px;
+    cursor: pointer; text-transform: uppercase;
+    text-shadow: 0 0 10px rgba(255,215,0,0.6);
+    box-shadow: 0 0 14px rgba(255,215,0,0.25);
+    transition: all 0.15s;
+    opacity: 0.4; pointer-events: none;
+  }
+  .var-btn.enabled { opacity: 1; pointer-events: auto; }
+  .var-btn.enabled:hover { background: linear-gradient(180deg, rgba(255,215,0,0.35), rgba(255,140,0,0.35)); transform: scale(1.05); }
+  .var-btn:active { transform: scale(0.95); }
 
   /* sound bars */
   .panel-wave {
@@ -1035,6 +1052,7 @@
       <button class="panel-status-btn" id="replayCamBtn" onclick="toggleReplaySection()">
         <span id="replayCamLabel">STANDBY</span>
       </button>
+      <button class="var-btn" id="varBtn" onclick="triggerVAR()">VAR</button>
     </div>
 
   </div>
@@ -1318,6 +1336,9 @@ const SAVE_REPLAY_SEQ = [
   { label: 'REPLAY',      rate: 1.0,  seekFromEnd: 5, skipStart: 0 },
   { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5, skipStart: 0 },
 ];
+const VAR_SEQ = [
+  { label: 'VAR REVIEW',  rate: 1.0,  seekFromEnd: 10, skipStart: 0, skipEnd: 1 },
+];
 
 let activeReplaySeq = REPLAY_SEQ;
 
@@ -1356,6 +1377,11 @@ function playReplayClip() {
     video.play().catch(() => {});
     requestAnimationFrame(() => requestAnimationFrame(() => { video.style.opacity = '1'; }));
     video.onended = advance;
+    if (clip.skipEnd) {
+      const totalSecs = (clip.seekFromEnd || (isFinite(video.duration) ? video.duration : 10));
+      const playSecs = Math.max(0.5, totalSecs - (clip.skipStart || 0) - clip.skipEnd);
+      setTimeout(advance, (playSecs * 1000) / clip.rate);
+    }
   };
 
   // Fade out, then seek/reset, then play
@@ -1402,6 +1428,16 @@ function showSaveReplay(type) {
   if (replaySectionActive || replayChunks.length > 0) {
     captureReplay(false);
   }
+}
+
+// VAR review button (camera screen) — instant replay of last 10s minus 1s
+// at the end. No sound, no highlights save.
+function triggerVAR() {
+  if (!replaySectionActive && replayChunks.length === 0) return;
+  replayIsGoal = false;
+  currentReactionType = 'var';
+  activeReplaySeq = VAR_SEQ;
+  captureReplay(false);
 }
 
 // Open-palm gesture: silently capture the last ~20s into highlights
@@ -1643,15 +1679,15 @@ async function playHighlights() {
   document.getElementById('hlStopBtn').style.display = '';
   document.getElementById('hlEmpty').style.display = 'none';
 
-  // Compute final score for the intro card
+  // Pre-compute final score for the outro card (hidden at start)
   let finalH = 0, finalA = 0;
   hlEntries.forEach(e => {
     if (e.type === 'goal' && e.team === 'home') finalH++;
     if (e.type === 'goal' && e.team === 'away') finalA++;
   });
   const fs = document.getElementById('hlFinalScore');
-  fs.style.display = '';
   fs.textContent = finalH + ' — ' + finalA;
+  fs.style.display = 'none';
 
   startHlAudio();
   showTitleCard();
@@ -1694,8 +1730,9 @@ function stopHighlights() {
 function playNextHighlight() {
   if (!hlPlaying) return;
   if (hlIdx >= hlEntries.length) {
+    document.getElementById('hlFinalScore').style.display = '';
     showTitleCard();
-    setTimeout(() => { stopHighlights(); }, 4000);
+    setTimeout(() => { stopHighlights(); }, 5000);
     return;
   }
   const entry = hlEntries[hlIdx];
@@ -2102,7 +2139,7 @@ function captureReplay(showGoalFirst, silent) {
     replayUrl = URL.createObjectURL(chosen);
 
     // Save to highlights (clone the blob so revoke/cleanup doesn't affect IDB copy)
-    if (highlightsEnabled) {
+    if (highlightsEnabled && currentReactionType !== 'var') {
       const reactionType = currentReactionType || 'goal';
       const entry = {
         type: reactionType,
@@ -2130,6 +2167,9 @@ function captureReplay(showGoalFirst, silent) {
         document.getElementById('goalPopup').classList.remove('visible');
         startReplaySequence();
       }, 10000);
+    } else if (currentReactionType === 'var') {
+      // VAR review — no delay, go straight to the replay
+      startReplaySequence();
     } else {
       // Save/nearmiss: show replay immediately after a short 5s pause
       replayTimerHandle = setTimeout(() => {
@@ -2296,6 +2336,8 @@ function updateReplaySectionUI() {
   const panelLabel = document.getElementById('replayCamLabel');
   const replayCamPanel = document.getElementById('replayCamPanel');
   const tag = document.getElementById('replayCamTag');
+  const varBtn = document.getElementById('varBtn');
+  if (varBtn) varBtn.classList.toggle('enabled', replaySectionActive);
   if (replaySectionActive) {
     btn.textContent = 'STOP RECORDING';
     btn.classList.add('stop');
