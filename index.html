@@ -1402,6 +1402,19 @@ function startReplaySequence() {
   video.muted = true;
   video.style.opacity = '0';
   video.src = replayUrl;
+  // MediaRecorder WebM blobs often report duration=Infinity.
+  // Seeking to a huge timestamp forces the browser to scan the file
+  // and set the real duration, so seekFromEnd works correctly.
+  video.onloadedmetadata = () => {
+    video.onloadedmetadata = null;
+    if (!isFinite(video.duration)) {
+      video.currentTime = 1e10;
+      video.onseeked = () => {
+        video.onseeked = null;
+        video.currentTime = 0;
+      };
+    }
+  };
   video.oncanplay = () => { video.oncanplay = null; playReplayClip(); };
   video.load();
 }
@@ -1756,6 +1769,14 @@ function playNextHighlight() {
   v.src = hlBlobUrl;
 
   hlStage = 'normal';
+  // Resolve Infinity duration so slo-mo seeking works.
+  v.onloadedmetadata = () => {
+    v.onloadedmetadata = null;
+    if (!isFinite(v.duration)) {
+      v.currentTime = 1e10;
+      v.onseeked = () => { v.onseeked = null; v.currentTime = 0; };
+    }
+  };
   v.oncanplay = () => {
     v.oncanplay = null;
     v.currentTime = 0;
@@ -2034,31 +2055,50 @@ async function startGesture() {
 }
 
 
-// ── Replay ring buffer ──
+// ── Rolling buffer recorder ──
+// Records with timeslice; keeps the last ROLL_KEEP_SECS of 500ms chunks.
+// On capture, buildRollBlob() produces a blob that ends exactly NOW and
+// starts N seconds ago — no segment-boundary guessing, no missed goals.
 let replayRecorder = null;
-let replayChunks = [];
-let replayInitChunk = null;
-const REPLAY_DURATION_MS = 12000; // 12s buffer, show last 10s
-const REPLAY_CHUNK_MS = 500;
+let replayChunks   = [];        // [{data, t}]
+let replayInitChunk = null;     // first chunk = WebM init/header
+const ROLL_CHUNK_MS  = 500;     // emit data every 500 ms
+const ROLL_KEEP_SECS = 35;      // keep 35 s in the buffer
+const ROLL_REPLAY_SECS = 12;    // instant-replay blob (~10 s visible + margin)
+const ROLL_HL_SECS   = 23;      // highlights blob (full build-up)
 
-// Rolling-segment approach: every 12s, stop+restart the recorder so each
-// segment is a complete, valid WebM (proper duration, plays correctly,
-// can be seeked). We keep the last complete segment and the in-progress
-// one. On goal: stop current, get a complete WebM, hand it to replay.
-const SEGMENT_MS = 22000;
+// (legacy names kept so VAR recorders can share replayMime)
+const REPLAY_DURATION_MS = ROLL_REPLAY_SECS * 1000;
+const REPLAY_CHUNK_MS    = ROLL_CHUNK_MS;
 let replayMime = '';
-let replaySegmentTimer = null;
-let replaySegmentStartTime = 0;   // when current segment started
-let replayPrevBlob = null;       // last completed segment
-let replayCurrChunks = [];       // current in-progress segment chunks
-let replayOnFinalize = null;     // callback for goal-triggered stop
+
+function buildRollBlob(seconds) {
+  if (!replayInitChunk || replayChunks.length === 0) return null;
+  const cutoff = Date.now() - seconds * 1000;
+  let start = replayChunks.findIndex(c => c.t >= cutoff);
+  if (start < 0) start = 0; // fewer chunks than asked; take all
+  const parts = [replayInitChunk, ...replayChunks.slice(start).map(c => c.data)];
+  return new Blob(parts, { type: replayMime || 'video/webm' });
+}
 
 function startReplayRecorder(stream) {
   stopReplayRecorder();
   replayMime = ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm','video/mp4']
     .find(m => MediaRecorder.isTypeSupported(m)) || '';
-  replayPrevBlob = null;
-  startReplaySegment(stream);
+  replayInitChunk = null;
+  replayChunks = [];
+  try {
+    replayRecorder = new MediaRecorder(stream, replayMime ? { mimeType: replayMime } : {});
+  } catch(e) { replayRecorder = null; return; }
+  replayRecorder.ondataavailable = e => {
+    if (!e.data || e.data.size === 0) return;
+    if (!replayInitChunk) { replayInitChunk = e.data; return; } // header chunk
+    const t = Date.now();
+    replayChunks.push({ data: e.data, t });
+    const cutoff = t - ROLL_KEEP_SECS * 1000;
+    while (replayChunks.length > 1 && replayChunks[0].t < cutoff) replayChunks.shift();
+  };
+  replayRecorder.start(ROLL_CHUNK_MS);
   startVarRecorder(stream);
 }
 
@@ -2144,121 +2184,52 @@ function captureVarBlob(cb) {
   try { s.recorder.stop(); } catch(e) { s.onFinalize = null; cb(null); }
 }
 
-function startReplaySegment(stream) {
-  replayCurrChunks = [];
-  replaySegmentStartTime = Date.now();
-  try {
-    replayRecorder = new MediaRecorder(stream, replayMime ? { mimeType: replayMime } : {});
-  } catch(e) { replayRecorder = null; return; }
-
-  replayRecorder.ondataavailable = e => {
-    if (e.data && e.data.size > 0) replayCurrChunks.push(e.data);
-  };
-
-  replayRecorder.onstop = () => {
-    const blob = replayCurrChunks.length
-      ? new Blob(replayCurrChunks, { type: replayMime || 'video/webm' })
-      : null;
-
-    if (replayOnFinalize) {
-      // Goal-triggered stop: hand the blob to the replay flow
-      const cb = replayOnFinalize;
-      replayOnFinalize = null;
-      cb(blob);
-    } else if (blob) {
-      // Timer-triggered rotation: save as previous, start a new segment
-      replayPrevBlob = blob;
-      if (replaySectionStream && replaySectionActive) {
-        startReplaySegment(replaySectionStream);
-      }
-    }
-  };
-
-  replayRecorder.start();
-  replaySegmentTimer = setTimeout(() => {
-    if (replayRecorder && replayRecorder.state === 'recording') {
-      try { replayRecorder.stop(); } catch(e) {}
-    }
-  }, SEGMENT_MS);
-}
-
 function stopReplayRecorder() {
-  if (replaySegmentTimer) { clearTimeout(replaySegmentTimer); replaySegmentTimer = null; }
-  replayOnFinalize = null;
   if (replayRecorder && replayRecorder.state !== 'inactive') {
     try { replayRecorder.stop(); } catch(e) {}
   }
   replayRecorder = null;
-  replayCurrChunks = [];
+  replayInitChunk = null;
+  replayChunks = [];
   stopVarRecorder();
 }
 
 function captureReplay(showGoalFirst, silent) {
-  if (replaySegmentTimer) { clearTimeout(replaySegmentTimer); replaySegmentTimer = null; }
+  // Snapshot the rolling buffer right now — both blobs end at this exact moment.
+  const replayBlob = buildRollBlob(ROLL_REPLAY_SECS);
+  const hlBlob = highlightsEnabled ? buildRollBlob(ROLL_HL_SECS) : null;
 
-  const handleBlob = (currBlob) => {
-    const segmentAge = Date.now() - replaySegmentStartTime;
-    let chosen = null;
-    // Use the previous full 22s segment unless the current one already
-    // has 18+s of build-up footage.
-    if (currBlob && segmentAge >= 18000) chosen = currBlob;
-    else if (replayPrevBlob) chosen = replayPrevBlob;
-    else if (currBlob) chosen = currBlob;
+  if (!replayBlob) {
+    if (showGoalFirst) document.getElementById('goalPopup').classList.add('visible');
+    return;
+  }
 
-    if (!chosen) {
-      if (showGoalFirst) document.getElementById('goalPopup').classList.add('visible');
-      if (replaySectionStream && replaySectionActive) startReplaySegment(replaySectionStream);
-      return;
-    }
+  if (replayUrl) URL.revokeObjectURL(replayUrl);
+  replayUrl = URL.createObjectURL(replayBlob);
 
-    if (replayUrl) URL.revokeObjectURL(replayUrl);
-    replayUrl = URL.createObjectURL(chosen);
-
-    // Save to highlights (clone the blob so revoke/cleanup doesn't affect IDB copy)
-    if (highlightsEnabled) {
-      const reactionType = currentReactionType || 'goal';
-      const entry = {
-        type: reactionType,
-        blob: chosen,
-        timestamp: Date.now(),
-        team: null,
-        scoreAfter: null,
-      };
-      saveHighlight(entry).then(id => {
+  if (hlBlob && highlightsEnabled) {
+    const reactionType = currentReactionType || 'goal';
+    saveHighlight({ type: reactionType, blob: hlBlob, timestamp: Date.now(), team: null, scoreAfter: null })
+      .then(id => {
         pendingHighlightId = (reactionType === 'goal') ? id : null;
         refreshHighlightsListBadge();
       }).catch(() => {});
-    }
+  }
 
-    if (silent) {
-      // Moment bookmark — just saved to IDB; no popup, no replay, no sound.
-      if (replaySectionStream && replaySectionActive) startReplaySegment(replaySectionStream);
-      return;
-    }
+  if (silent) return;
 
-    if (showGoalFirst) {
-      document.getElementById('goalPopup').classList.add('visible');
-      replayTimerHandle = setTimeout(() => {
-        replayTimerHandle = null;
-        document.getElementById('goalPopup').classList.remove('visible');
-        startReplaySequence();
-      }, 10000);
-    } else {
-      // Save/nearmiss: show replay immediately after a short 5s pause
-      replayTimerHandle = setTimeout(() => {
-        replayTimerHandle = null;
-        startReplaySequence();
-      }, 5000);
-    }
-
-    if (replaySectionStream && replaySectionActive) startReplaySegment(replaySectionStream);
-  };
-
-  if (replayRecorder && replayRecorder.state === 'recording') {
-    replayOnFinalize = handleBlob;
-    try { replayRecorder.stop(); } catch(e) { handleBlob(null); }
+  if (showGoalFirst) {
+    document.getElementById('goalPopup').classList.add('visible');
+    replayTimerHandle = setTimeout(() => {
+      replayTimerHandle = null;
+      document.getElementById('goalPopup').classList.remove('visible');
+      startReplaySequence();
+    }, 10000);
   } else {
-    handleBlob(null);
+    replayTimerHandle = setTimeout(() => {
+      replayTimerHandle = null;
+      startReplaySequence();
+    }, 5000);
   }
 }
 
