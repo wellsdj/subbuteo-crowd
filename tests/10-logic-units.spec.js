@@ -36,16 +36,16 @@ test.describe('Pure logic units', () => {
     expect(result).toBe(true);
   });
 
-  test('TIMER_TOTAL is 1200 seconds (20 minutes)', async ({ page }) => {
+  test('TIMER_TOTAL is 1800 seconds (30 minutes)', async ({ page }) => {
     await gotoApp(page);
     const total = await page.evaluate(() => TIMER_TOTAL);
-    expect(total).toBe(1200);
+    expect(total).toBe(1800);
   });
 
   test('timerSeconds starts at TIMER_TOTAL', async ({ page }) => {
     await gotoApp(page);
     const secs = await page.evaluate(() => timerSeconds);
-    expect(secs).toBe(1200);
+    expect(secs).toBe(1800);
   });
 
   test('timerRunning starts false', async ({ page }) => {

@@ -2,10 +2,10 @@ const { test, expect } = require('@playwright/test');
 const { gotoApp, navigateTo } = require('./helpers');
 
 test.describe('Match timer', () => {
-  test('timer starts at 20:00', async ({ page }) => {
+  test('timer starts at 30:00', async ({ page }) => {
     await gotoApp(page);
     await navigateTo(page, 'match');
-    await expect(page.locator('#msTimer')).toHaveText('20:00');
+    await expect(page.locator('#msTimer')).toHaveText('30:00');
   });
 
   test('start button exists', async ({ page }) => {
@@ -28,7 +28,7 @@ test.describe('Match timer', () => {
     await page.click('#msStartBtn');
     await page.waitForTimeout(2200);
     const text = await page.locator('#msTimer').textContent();
-    expect(text).not.toBe('20:00');
+    expect(text).not.toBe('30:00');
   });
 
   test('pause stops countdown', async ({ page }) => {
@@ -43,13 +43,33 @@ test.describe('Match timer', () => {
     expect(after).toBe(snapshot);
   });
 
-  test('reset returns timer to 20:00', async ({ page }) => {
+  test('reset returns timer to 30:00', async ({ page }) => {
     await gotoApp(page);
     await navigateTo(page, 'match');
     await page.click('#msStartBtn');
     await page.waitForTimeout(1500);
     await page.click('[onclick="timerReset()"]');
-    await expect(page.locator('#msTimer')).toHaveText('20:00');
+    await expect(page.locator('#msTimer')).toHaveText('30:00');
+  });
+
+  test('+1 MIN button adds 60 seconds', async ({ page }) => {
+    await gotoApp(page);
+    await navigateTo(page, 'match');
+    const before = await page.evaluate(() => timerSeconds);
+    await page.click('[onclick="timerAddMinute()"]');
+    const after = await page.evaluate(() => timerSeconds);
+    expect(after).toBe(before + 60);
+  });
+
+  test('+1 MIN works while timer is running', async ({ page }) => {
+    await gotoApp(page);
+    await navigateTo(page, 'match');
+    await page.click('#msStartBtn');
+    await page.waitForTimeout(500);
+    const before = await page.evaluate(() => timerSeconds);
+    await page.click('[onclick="timerAddMinute()"]');
+    const after = await page.evaluate(() => timerSeconds);
+    expect(after).toBeGreaterThan(before);
   });
 
   test('reset changes button back to START', async ({ page }) => {

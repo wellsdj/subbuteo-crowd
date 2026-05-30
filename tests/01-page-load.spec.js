@@ -30,9 +30,9 @@ test.describe('Page load and structure', () => {
     await expect(page.locator('#bannerScore')).toHaveText('0 — 0');
   });
 
-  test('banner shows 20:00 initially', async ({ page }) => {
+  test('banner shows 30:00 initially', async ({ page }) => {
     await gotoApp(page);
-    await expect(page.locator('#bannerTimer')).toHaveText('20:00');
+    await expect(page.locator('#bannerTimer')).toHaveText('30:00');
   });
 
   test('nav sidebar has 5 sections', async ({ page }) => {
