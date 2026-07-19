@@ -2140,7 +2140,9 @@ function startListening() {
     const GOAL_PHRASES   = ['goal', "it's in", 'its in', "it's a go", 'its a go', 'banger', 'smashed it'];
     const SAVE_PHRASES   = ['what a save', 'great save', 'what a keep'];
     const MISS_PHRASES   = ["it's wide", 'its wide', "it's over", 'its over', 'wide', 'over the bar'];
-    const VAR_RE         = /\bv[\s.]*a[\s.]*r\b/;
+    // Match "var", "v a r", "v.a.r", "v, a, r", "v-a-r" — any way the
+    // recognizer spells VAR — but not words like "vary" or "varsity".
+    const VAR_RE         = /\bv[\s.,'-]*a[\s.,'-]*r\b/i;
 
     if (VAR_RE.test(transcript)) {
       const now = Date.now();
