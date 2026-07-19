@@ -1928,7 +1928,7 @@ let hlCumHome = 0, hlCumAway = 0;
 // Reel timing windows (seconds), all relative to the goal moment mid-clip.
 const REEL_PREROLL_SEC = 7;   // build-up shown before the goal at full speed
 const REEL_SLOMO_PRE   = 3;   // slo-mo starts this far before the goal
-const REEL_SLOMO_POST  = 2;   // slo-mo runs this far past the goal
+const REEL_SLOMO_POST  = 5;   // slo-mo runs this far past the goal
 
 async function playHighlights() {
   const allEntries = await getHighlights();
