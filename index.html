@@ -634,9 +634,12 @@
   .mb-team.away { color: var(--blue); text-shadow: 0 0 12px rgba(102,153,255,0.5); }
   .mb-score { font-family: var(--f-display); font-size: 17px; color: var(--white); letter-spacing: 2px; min-width: 42px; text-align: center; padding-top: 2px; }
   .mb-sep { color: rgba(232,244,255,0.2); font-size: 10px; }
-  .mb-timer { font-family: var(--f-mono); font-size: 12px; letter-spacing: 2px; color: rgba(232,244,255,0.55); min-width: 48px; text-align: center; }
+  .mb-timer { font-family: var(--f-mono); font-size: 12px; letter-spacing: 2px; color: rgba(232,244,255,0.55); text-align: right; min-width: 42px; }
   .mb-timer.running { color: var(--green); text-shadow: 0 0 8px rgba(0,255,136,0.5); }
   .mb-timer.done { color: var(--red); animation: blink 0.6s infinite; }
+  .mb-ms { font-family: var(--f-mono); font-size: 10px; letter-spacing: 1px; color: rgba(232,244,255,0.3); min-width: 30px; text-align: left; font-variant-numeric: tabular-nums; }
+  .mb-ms.running { color: rgba(0,255,136,0.65); }
+  .mb-ms.done { color: var(--red); }
 
   /* ── Match Section (full screen) ── */
   .match-section {
@@ -677,15 +680,27 @@
   .ms-score-btn:hover { border-color: var(--green); color: var(--green); background: rgba(0,255,136,0.06); box-shadow: 0 0 10px rgba(0,255,136,0.25); }
   .ms-score-btn.away:hover { border-color: var(--blue); color: var(--blue); background: rgba(102,153,255,0.06); box-shadow: 0 0 10px rgba(102,153,255,0.25); }
 
+  .ms-timer-row {
+    display: flex; align-items: baseline; justify-content: center;
+    gap: 4px; margin-bottom: 10px;
+  }
   .ms-timer {
     font-family: var(--f-mono); font-size: clamp(60px,13vw,120px);
     letter-spacing: 6px; color: var(--white); line-height: 1;
-    margin-bottom: 10px; font-variant-numeric: tabular-nums;
+    font-variant-numeric: tabular-nums;
     transition: color 0.3s;
     text-shadow: 0 4px 0 rgba(0,0,0,0.4);
   }
   .ms-timer.running { color: var(--green); text-shadow: 0 0 44px rgba(0,255,136,0.35), 0 4px 0 rgba(0,0,0,0.4); }
   .ms-timer.done { color: var(--red); text-shadow: 0 0 44px rgba(255,60,60,0.45), 0 4px 0 rgba(0,0,0,0.4); }
+  .ms-timer-ms {
+    font-family: var(--f-mono); font-size: clamp(20px,4vw,38px);
+    letter-spacing: 2px; color: rgba(232,244,255,0.32); line-height: 1;
+    font-variant-numeric: tabular-nums; min-width: 3.4ch; text-align: left;
+    transition: color 0.3s;
+  }
+  .ms-timer-ms.running { color: rgba(0,255,136,0.7); }
+  .ms-timer-ms.done { color: var(--red); }
 
   .ms-progress {
     width: 100%; max-width: 620px; height: 4px;
@@ -929,6 +944,11 @@
     display: inline-block;
   }
   .hl-bottom-board .hl-bb-score.bump { animation: hlScoreBump 0.6s cubic-bezier(0.2,1.6,0.4,1); }
+  .hl-bottom-board .hl-bb-clock {
+    font-family: var(--f-mono); font-size: 12px; letter-spacing: 1px;
+    color: rgba(0,255,136,0.7); margin-left: 10px; padding-left: 12px;
+    border-left: 1px solid rgba(255,255,255,0.15); font-variant-numeric: tabular-nums;
+  }
   @keyframes hlScoreBump {
     0%   { transform: scale(1); color: #fff; }
     30%  { transform: scale(1.8); color: #ffd700; text-shadow: 0 0 40px #ffd700; }
@@ -1156,7 +1176,7 @@
   <span class="mb-team home">FLANDERS</span>
   <span class="mb-score" id="bannerScore">0 — 0</span>
   <span class="mb-sep">·</span>
-  <span class="mb-timer" id="bannerTimer">30:00</span>
+  <span class="mb-timer" id="bannerTimer">30:00</span><span class="mb-ms" id="bannerMs">.000</span>
   <span class="mb-sep">·</span>
   <span class="mb-team away">PETERBOROUGH</span>
 </div>
@@ -1945,9 +1965,12 @@ function playNextHighlight() {
   }
   const entry = hlEntries[hlIdx];
 
-  // Show bottom scoreboard (current score before this clip)
+  // Show bottom scoreboard (current score before this clip) + the live-match
+  // clock this moment happened at.
   document.getElementById('hlBoardHome').textContent = hlCumHome;
   document.getElementById('hlBoardAway').textContent = hlCumAway;
+  const clockEl = document.getElementById('hlBoardClock');
+  if (clockEl) clockEl.textContent = entry.clockLabel || '';
   document.getElementById('hlBottomBoard').style.display = '';
 
   if (hlBlobUrl) URL.revokeObjectURL(hlBlobUrl);
@@ -1961,48 +1984,66 @@ function playNextHighlight() {
   v.src = hlBlobUrl;
 
   hlStage = 'normal';
+  let celebrated = false;
+
+  // The clip ends exactly at the trigger (fist/finger up), so the goal frame is
+  // the final frame. Fire the celebration the instant playback reaches it —
+  // frame-accurate — rather than waiting on the `ended` event, which lags a few
+  // frames. This lands the crowd roar right on the goal.
+  const GOAL_FRAME_EPS = 0.06; // seconds
+  function fireCelebration() {
+    if (celebrated || !hlPlaying) return;
+    celebrated = true;
+    try { v.pause(); } catch (e) {}   // freeze on the goal frame
+    if (entry.type === 'goal') {
+      const flash = document.getElementById('hlGoalFlash');
+      const isHome = entry.team === 'home';
+      flash.style.color = isHome ? '#ff3355' : '#4a9eff';
+      document.getElementById('hlGoalText').textContent = 'GOAL!';
+      flash.classList.remove('visible');
+      void flash.offsetWidth; // restart the CSS animation
+      flash.classList.add('visible');
+      playHlGoalSound();
+      setTimeout(() => {
+        if (!hlPlaying) return;
+        // Scoreboard jumps to what it was in the live match at this moment
+        if (isHome) hlCumHome++; else hlCumAway++;
+        const scoreEl = document.getElementById(isHome ? 'hlBoardHome' : 'hlBoardAway');
+        scoreEl.textContent = isHome ? hlCumHome : hlCumAway;
+        scoreEl.classList.remove('bump');
+        void scoreEl.offsetWidth;
+        scoreEl.classList.add('bump');
+        flash.classList.remove('visible');
+        setTimeout(() => { if (hlPlaying) startSloMo(v); }, 300);
+      }, 2000);
+    } else {
+      playHlReactionSound();
+      startSloMo(v);
+    }
+  }
+
+  // rAF watcher: catch the goal frame the moment we reach it.
+  function watchGoalFrame() {
+    if (!hlPlaying || hlStage !== 'normal' || celebrated) return;
+    if (isFinite(v.duration) && v.duration > 0 && v.currentTime >= v.duration - GOAL_FRAME_EPS) {
+      fireCelebration();
+      return;
+    }
+    requestAnimationFrame(watchGoalFrame);
+  }
+
   v.oncanplay = () => {
     v.oncanplay = null;
     v.currentTime = 0;
     v.play().catch(() => {});
+    requestAnimationFrame(watchGoalFrame);
   };
   v.onended = () => {
     if (!hlPlaying) return;
-    if (hlStage === 'normal') {
-      if (entry.type === 'goal') {
-        // Flash "GOAL!" in team color, then increment scoreboard, then slo-mo
-        const flash = document.getElementById('hlGoalFlash');
-        const isHome = entry.team === 'home';
-        flash.style.color = isHome ? '#ff3355' : '#4a9eff';
-        document.getElementById('hlGoalText').textContent = 'GOAL!';
-        // Force re-trigger of CSS animation by removing then adding next frame
-        flash.classList.remove('visible');
-        // eslint-disable-next-line no-unused-expressions
-        void flash.offsetWidth;
-        flash.classList.add('visible');
-        playHlGoalSound();
-        setTimeout(() => {
-          if (!hlPlaying) return;
-          // Increment scoreboard with bump animation
-          if (isHome) hlCumHome++; else hlCumAway++;
-          const scoreEl = document.getElementById(isHome ? 'hlBoardHome' : 'hlBoardAway');
-          scoreEl.textContent = isHome ? hlCumHome : hlCumAway;
-          scoreEl.classList.remove('bump');
-          void scoreEl.offsetWidth;
-          scoreEl.classList.add('bump');
-          flash.classList.remove('visible');
-          setTimeout(() => {
-            if (!hlPlaying) return;
-            startSloMo(v);
-          }, 300);
-        }, 2000);
-      } else {
-        playHlReactionSound();
-        startSloMo(v);
-      }
-    } else {
-      // Done with slo-mo — fade to black, advance, fade back in
-      advanceHighlight(v);
+    if (hlStage === 'slomo') {
+      advanceHighlight(v);       // slo-mo finished → next clip
+    } else if (hlStage === 'normal') {
+      fireCelebration();         // fallback if the watcher missed the frame
     }
   };
   v.load();
@@ -2370,12 +2411,18 @@ function captureReplay(showGoalFirst, silent) {
     // also runs all the way up to the goal/save).
     if (highlightsEnabled) {
       const reactionType = currentReactionType || 'goal';
+      // Stamp the exact live-match moment (to the millisecond) the reaction
+      // fired — i.e. when the fist/finger went up. The clip ends at this
+      // instant, so in the reel the celebration is timed to line up with it.
+      const clockMs = (typeof matchClockMs === 'function') ? matchClockMs() : null;
       const entry = {
         type: reactionType,
         blob: chosen,
         timestamp: Date.now(),
         team: null,
         scoreAfter: null,
+        matchClockMs: clockMs,
+        clockLabel: clockMs != null ? formatClock(clockMs) : null,
       };
       saveHighlight(entry).then(id => {
         pendingHighlightId = (reactionType === 'goal') ? id : null;
@@ -2628,7 +2675,7 @@ function updateReplaySectionUI() {
     </div>
   </div>
 
-  <div class="ms-timer" id="msTimer">30:00</div>
+  <div class="ms-timer-row"><span class="ms-timer" id="msTimer">30:00</span><span class="ms-timer-ms" id="msMs">.000</span></div>
   <div class="ms-progress"><div class="ms-progress-bar" id="msProgressBar" style="width:100%"></div></div>
 
   <div class="ms-controls">
@@ -2682,6 +2729,7 @@ function updateReplaySectionUI() {
       <span style="color:#666">—</span>
       <span class="hl-bb-score" id="hlBoardAway">0</span>
       <span class="hl-bb-away">PETERBOROUGH</span>
+      <span class="hl-bb-clock" id="hlBoardClock"></span>
     </div>
     <div class="hl-transition" id="hlTransition"></div>
     <div class="hl-goal-flash" id="hlGoalFlash">
@@ -2833,6 +2881,49 @@ let timerRunning = false;
 let timerInterval = null;
 let homeScore = 0, awayScore = 0;
 
+// ── Precise sub-second clock ──
+// timerSeconds (whole seconds) stays authoritative; this layers millisecond
+// precision on top for the readout + highlight sync, re-anchored to real time
+// at every whole-second boundary so it never drifts.
+let tickAnchorPerf = 0;   // performance.now() at the last second boundary while running
+let msRafHandle = null;
+
+// Remaining match time in ms, precise to the millisecond. Monotonic while
+// running — used to stamp each highlight with the exact live-match moment
+// the goal/save was triggered, so the replay can line up to it.
+function matchClockMs() {
+  if (timerRunning && timerSeconds > 0) {
+    return Math.max(0, timerSeconds * 1000 - (performance.now() - tickAnchorPerf));
+  }
+  return Math.max(0, timerSeconds * 1000);
+}
+function formatClock(ms) {
+  ms = Math.max(0, Math.round(ms));
+  const m = Math.floor(ms / 60000).toString().padStart(2, '0');
+  const s = Math.floor((ms % 60000) / 1000).toString().padStart(2, '0');
+  const f = (ms % 1000).toString().padStart(3, '0');
+  return m + ':' + s + '.' + f;
+}
+function updateMsDisplay() {
+  const done = timerSeconds <= 0;
+  const running = timerRunning && !done;
+  let frac = 0;
+  if (running) {
+    frac = 1000 - (performance.now() - tickAnchorPerf); // counts 999 → 000 each second
+    if (frac < 0) frac = 0; else if (frac > 999) frac = 999;
+  }
+  const str = '.' + Math.floor(frac).toString().padStart(3, '0');
+  const cls = done ? ' done' : running ? ' running' : '';
+  const b = document.getElementById('bannerMs');
+  if (b) { b.textContent = str; b.className = 'mb-ms' + cls; }
+  const m = document.getElementById('msMs');
+  if (m) { m.textContent = str; m.className = 'ms-timer-ms' + cls; }
+}
+function msLoop() {
+  updateMsDisplay();
+  if (timerRunning) msRafHandle = requestAnimationFrame(msLoop);
+}
+
 function updateTimerDisplay() {
   const m = Math.floor(timerSeconds / 60).toString().padStart(2,'0');
   const s = (timerSeconds % 60).toString().padStart(2,'0');
@@ -2857,21 +2948,26 @@ function timerToggle() {
   document.getElementById('msStartBtn').textContent = timerRunning ? 'PAUSE' : 'START';
   document.getElementById('msStartBtn').className = timerRunning ? 'ms-ctrl-btn danger' : 'ms-ctrl-btn primary';
   if (timerRunning) {
+    tickAnchorPerf = performance.now();
+    msLoop();
     timerInterval = setInterval(() => {
       if (!timerRunning) return;
       timerSeconds--;
+      tickAnchorPerf = performance.now();
       updateTimerDisplay();
       if (timerSeconds <= 0) {
         timerRunning = false;
         clearInterval(timerInterval);
         document.getElementById('msStartBtn').textContent = 'START';
         document.getElementById('msStartBtn').className = 'ms-ctrl-btn primary';
+        updateMsDisplay();
         playWhistle();
         setTimeout(showFullTimePopup, 1500);
       }
     }, 1000);
   } else {
     clearInterval(timerInterval);
+    updateMsDisplay();
   }
 }
 
@@ -2882,10 +2978,12 @@ function timerReset() {
   document.getElementById('msStartBtn').textContent = 'START';
   document.getElementById('msStartBtn').className = 'ms-ctrl-btn primary';
   updateTimerDisplay();
+  updateMsDisplay();
 }
 function timerAddMinute() {
   timerSeconds += 60;
   updateTimerDisplay();
+  updateMsDisplay();
 }
 
 function playWhistle() {
@@ -2905,6 +3003,7 @@ function changeScore(team, delta) {
 }
 
 updateTimerDisplay();
+updateMsDisplay();
 
 // Initialise crowd section as active on load
 document.addEventListener('DOMContentLoaded', () => showSection('crowd'));
