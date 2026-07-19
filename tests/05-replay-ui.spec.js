@@ -56,10 +56,10 @@ test.describe('Replay UI', () => {
     expect(count).toBe(2);
   });
 
-  test('VAR_SEQ has 1 clip', async ({ page }) => {
+  test('VAR_SEQ is 10s review, then 5s slo-mo, then 5s super slow', async ({ page }) => {
     await gotoApp(page);
-    const count = await page.evaluate(() => VAR_SEQ.length);
-    expect(count).toBe(1);
+    const seq = await page.evaluate(() => VAR_SEQ.map(c => [c.rate, c.seekFromEnd]));
+    expect(seq).toEqual([[1.0, 10], [0.5, 5], [0.25, 5]]);
   });
 
   test('FULL REPLAY clip has seekFromEnd=10', async ({ page }) => {
