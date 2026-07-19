@@ -1547,22 +1547,29 @@ async function checkPassword(e) {
 let replayUrl = null;
 let replaySeqIdx = 0;
 let replayTimerHandle = null;
+// Where the goal/trigger sits inside the current replay clip, in ms from the
+// clip's start. The clip carries a few seconds of aftermath past it, so the
+// goal lands mid-clip. null → legacy clip with no stamp (goal assumed at end).
+let replayGoalOffsetMs = null;
 
+// Each clip plays a window CENTRED ON THE GOAL: beforeGoal seconds of build-up,
+// then the goal, then afterGoal seconds of aftermath. (seekFromEnd is kept as a
+// fallback for legacy clips that were captured ending exactly at the trigger.)
 const REPLAY_SEQ = [
-  { label: 'FULL REPLAY', rate: 1.0,  seekFromEnd: 10, skipStart: 0 },
-  { label: 'LAST 5s',     rate: 1.0,  seekFromEnd: 5,  skipStart: 0 },
-  { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5,  skipStart: 0 },
-  { label: 'SUPER SLOW',  rate: 0.25, seekFromEnd: 3,  skipStart: 0 },
+  { label: 'FULL REPLAY', rate: 1.0,  seekFromEnd: 10, skipStart: 0, beforeGoal: 8,   afterGoal: 4   },
+  { label: 'THE GOAL',    rate: 1.0,  seekFromEnd: 5,  skipStart: 0, beforeGoal: 4,   afterGoal: 3   },
+  { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5,  skipStart: 0, beforeGoal: 4,   afterGoal: 2   },
+  { label: 'SUPER SLOW',  rate: 0.25, seekFromEnd: 3,  skipStart: 0, beforeGoal: 2.5, afterGoal: 1.5 },
 ];
 
 const SAVE_REPLAY_SEQ = [
-  { label: 'REPLAY',      rate: 1.0,  seekFromEnd: 5, skipStart: 0 },
-  { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5, skipStart: 0 },
+  { label: 'REPLAY',      rate: 1.0,  seekFromEnd: 5, skipStart: 0, beforeGoal: 5, afterGoal: 3 },
+  { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5, skipStart: 0, beforeGoal: 4, afterGoal: 2 },
 ];
 const VAR_SEQ = [
-  { label: 'VAR REVIEW',  rate: 1.0,  seekFromEnd: 10, skipStart: 0 },
-  { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5,  skipStart: 0 },
-  { label: 'SUPER SLOW',  rate: 0.25, seekFromEnd: 5,  skipStart: 0 },
+  { label: 'VAR REVIEW',  rate: 1.0,  seekFromEnd: 10, skipStart: 0, beforeGoal: 8, afterGoal: 4 },
+  { label: 'SLOW MOTION', rate: 0.5,  seekFromEnd: 5,  skipStart: 0, beforeGoal: 5, afterGoal: 3 },
+  { label: 'SUPER SLOW',  rate: 0.25, seekFromEnd: 5,  skipStart: 0, beforeGoal: 3, afterGoal: 2 },
 ];
 
 let activeReplaySeq = REPLAY_SEQ;
@@ -1571,15 +1578,24 @@ function updateReplayUI(idx) {
   const seq = activeReplaySeq;
   document.getElementById('replayLabel').textContent = seq[idx].label;
   const rateLabels = { 1.0: '1×', 0.5: '0.5×', 0.25: '0.25×' };
-  const secs = seq[idx].seekFromEnd ? seq[idx].seekFromEnd - (seq[idx].skipStart || 0) - (seq[idx].skipEnd || 0) : '—';
+  const clip = seq[idx];
+  const win = (clip.beforeGoal != null)
+    ? (clip.beforeGoal + (clip.afterGoal || 0))
+    : (clip.seekFromEnd || 0);
   document.getElementById('replayTimestamp').textContent =
-    (seq[idx].seekFromEnd ? secs + 's' : 'full') + ' · ' + (rateLabels[seq[idx].rate] || seq[idx].rate + '×');
+    (win ? win + 's' : 'full') + ' · ' + (rateLabels[clip.rate] || clip.rate + '×');
   // Show only as many pips as the active sequence has
   for (let i = 0; i < 4; i++) {
     const pip = document.getElementById('rsp' + i);
     pip.style.display = i < seq.length ? '' : 'none';
     pip.classList.toggle('active', i === idx);
   }
+}
+
+// Resolve where the goal sits in the current replay clip (seconds).
+function replayGoalSec(video) {
+  if (replayGoalOffsetMs != null && replayGoalOffsetMs > 0) return replayGoalOffsetMs / 1000;
+  return isFinite(video.duration) ? video.duration : 0; // legacy: goal at end
 }
 
 function playReplayClip() {
@@ -1589,9 +1605,11 @@ function playReplayClip() {
   updateReplayUI(idx);
   video.muted = true;
   video.onended = null;
+  video.ontimeupdate = null;
 
   const advance = () => {
     video.onended = null;
+    video.ontimeupdate = null;
     video.pause();
     replaySeqIdx++;
     if (replaySeqIdx >= activeReplaySeq.length && !replayIsGoal) {
@@ -1601,18 +1619,31 @@ function playReplayClip() {
     playReplayClip();
   };
 
+  // Window centred on the goal: [goal - beforeGoal, goal + afterGoal].
+  const goalSec = replayGoalSec(video);
+  const dur = isFinite(video.duration) ? video.duration : goalSec + (clip.afterGoal || 3);
+  const hasWindow = clip.beforeGoal != null;
+  const startAt = hasWindow
+    ? Math.max(0, goalSec - clip.beforeGoal)
+    : Math.max(0, dur - (clip.seekFromEnd || 0));
+  const stopAt = hasWindow
+    ? Math.min(dur, goalSec + (clip.afterGoal || 0))
+    : dur;
+
   const go = () => {
     video.playbackRate = clip.rate;
     video.play().catch(() => {});
     requestAnimationFrame(() => requestAnimationFrame(() => { video.style.opacity = '1'; }));
+    // Advance once we pass the aftermath window (or the clip actually ends).
+    video.ontimeupdate = () => { if (video.currentTime >= stopAt - 0.03) advance(); };
     video.onended = advance;
   };
 
-  // Fade out, then seek/reset, then play
+  // Fade out, then seek to the window start, then play
   video.style.opacity = '0';
 
-  if (clip.seekFromEnd && isFinite(video.duration)) {
-    video.currentTime = Math.max(0, video.duration - clip.seekFromEnd + (clip.skipStart || 0));
+  if (isFinite(video.duration)) {
+    video.currentTime = startAt;
     video.onseeked = () => { video.onseeked = null; go(); };
   } else {
     video.currentTime = 0;
@@ -1661,16 +1692,18 @@ function triggerVAR() {
   replayIsGoal = false;
   currentReactionType = 'var';
   activeReplaySeq = VAR_SEQ;
-  captureVarBlob((blob) => {
+  captureVarBlob((blob, goalOffsetMs) => {
     if (!blob) return;
     if (replayUrl) URL.revokeObjectURL(replayUrl);
     replayUrl = URL.createObjectURL(blob);
+    replayGoalOffsetMs = goalOffsetMs;
     startReplaySequence();
   });
 }
 
 function dismissGoal() {
   document.getElementById('goalPopup').classList.remove('visible');
+  replayCancelled = true; // in case aftermath footage is still recording
   if (replayTimerHandle) {
     clearTimeout(replayTimerHandle);
     replayTimerHandle = null;
@@ -1892,6 +1925,11 @@ let hlBlobUrl = null;
 let hlStage = 'idle'; // 'title' | 'normal' | 'slomo' | 'final'
 let hlCumHome = 0, hlCumAway = 0;
 
+// Reel timing windows (seconds), all relative to the goal moment mid-clip.
+const REEL_PREROLL_SEC = 7;   // build-up shown before the goal at full speed
+const REEL_SLOMO_PRE   = 3;   // slo-mo starts this far before the goal
+const REEL_SLOMO_POST  = 2;   // slo-mo runs this far past the goal
+
 async function playHighlights() {
   const allEntries = await getHighlights();
   // Goals without a team attribution were discarded by the user — skip them
@@ -1986,11 +2024,17 @@ function playNextHighlight() {
   hlStage = 'normal';
   let celebrated = false;
 
-  // The clip ends exactly at the trigger (fist/finger up), so the goal frame is
-  // the final frame. Fire the celebration the instant playback reaches it —
-  // frame-accurate — rather than waiting on the `ended` event, which lags a few
-  // frames. This lands the crowd roar right on the goal.
-  const GOAL_FRAME_EPS = 0.06; // seconds
+  // Where the goal sits inside this clip. The clip carries a few seconds of
+  // aftermath past it, so the goal is MID-CLIP: build-up → goal → celebration.
+  const goalSec = (entry.goalOffsetMs != null && entry.goalOffsetMs > 0)
+    ? entry.goalOffsetMs / 1000
+    : null; // legacy clip with no stamp → resolve to the end once duration known
+  function goalPoint() {
+    if (goalSec != null) return goalSec;
+    return isFinite(v.duration) ? v.duration : 0;
+  }
+
+  const GOAL_FRAME_EPS = 0.04; // seconds
   function fireCelebration() {
     if (celebrated || !hlPlaying) return;
     celebrated = true;
@@ -2014,18 +2058,22 @@ function playNextHighlight() {
         void scoreEl.offsetWidth;
         scoreEl.classList.add('bump');
         flash.classList.remove('visible');
-        setTimeout(() => { if (hlPlaying) startSloMo(v); }, 300);
+        setTimeout(() => { if (hlPlaying) startSloMo(v, goalPoint()); }, 300);
       }, 2000);
     } else {
       playHlReactionSound();
-      startSloMo(v);
+      startSloMo(v, goalPoint());
     }
   }
 
-  // rAF watcher: catch the goal frame the moment we reach it.
+  // rAF watcher: fire the instant playback reaches the goal moment (mid-clip),
+  // so the crowd roar + score jump land exactly on it.
   function watchGoalFrame() {
     if (!hlPlaying || hlStage !== 'normal' || celebrated) return;
-    if (isFinite(v.duration) && v.duration > 0 && v.currentTime >= v.duration - GOAL_FRAME_EPS) {
+    const g = goalPoint();
+    // Fire on the known offset even if duration isn't finite yet.
+    const haveTarget = (goalSec != null) || isFinite(v.duration);
+    if (haveTarget && g > 0 && v.currentTime >= g - GOAL_FRAME_EPS) {
       fireCelebration();
       return;
     }
@@ -2034,17 +2082,26 @@ function playNextHighlight() {
 
   v.oncanplay = () => {
     v.oncanplay = null;
-    v.currentTime = 0;
-    v.play().catch(() => {});
-    requestAnimationFrame(watchGoalFrame);
+    // Start a few seconds of build-up before the goal, not from the very start
+    // (the clip may hold 10–20s of pre-roll).
+    const startAt = Math.max(0, goalPoint() - REEL_PREROLL_SEC);
+    if (isFinite(v.duration) && startAt > 0.05) {
+      v.currentTime = startAt;
+      v.onseeked = () => {
+        v.onseeked = null;
+        v.play().catch(() => {});
+        requestAnimationFrame(watchGoalFrame);
+      };
+    } else {
+      v.currentTime = 0;
+      v.play().catch(() => {});
+      requestAnimationFrame(watchGoalFrame);
+    }
   };
   v.onended = () => {
     if (!hlPlaying) return;
-    if (hlStage === 'slomo') {
-      advanceHighlight(v);       // slo-mo finished → next clip
-    } else if (hlStage === 'normal') {
-      fireCelebration();         // fallback if the watcher missed the frame
-    }
+    if (hlStage === 'normal') fireCelebration(); // fallback if the watcher missed
+    // slo-mo manages its own advance (see startSloMo)
   };
   v.load();
 }
@@ -2067,12 +2124,34 @@ function advanceHighlight(v) {
   }, 500);
 }
 
-function startSloMo(v) {
+// Slo-mo replay CENTRED ON THE GOAL: a couple of seconds before it, through a
+// couple after. Advances to the next clip once it passes the window.
+function startSloMo(v, goalSec) {
   hlStage = 'slomo';
   v.playbackRate = 0.5;
-  if (isFinite(v.duration)) v.currentTime = Math.max(0, v.duration - 5);
-  else v.currentTime = 0;
-  v.onseeked = () => { v.onseeked = null; v.play().catch(() => {}); };
+  const g = (goalSec != null && goalSec > 0) ? goalSec : (isFinite(v.duration) ? v.duration : 0);
+  const startAt = Math.max(0, g - REEL_SLOMO_PRE);
+  const stopAt = isFinite(v.duration) ? Math.min(v.duration, g + REEL_SLOMO_POST) : (g + REEL_SLOMO_POST);
+
+  let advanced = false;
+  const doAdvance = () => {
+    if (advanced || !hlPlaying) return;
+    advanced = true;
+    v.ontimeupdate = null;
+    v.onended = null;
+    advanceHighlight(v);
+  };
+  v.onended = doAdvance;
+  v.ontimeupdate = () => {
+    if (hlStage === 'slomo' && v.currentTime >= stopAt - 0.03) doAdvance();
+  };
+
+  if (isFinite(v.duration)) {
+    v.currentTime = startAt;
+    v.onseeked = () => { v.onseeked = null; v.play().catch(() => {}); };
+  } else {
+    v.play().catch(() => {});
+  }
 }
 
 
@@ -2370,6 +2449,10 @@ function stopVarRecorder() {
 }
 // Pick whichever recorder has been running longest, stop it, hand the
 // finalized WebM to the callback. Restart that slot afterwards.
+// Keep rolling this long PAST the trigger before finalizing, so the goal sits
+// mid-clip with a few seconds of aftermath after it (buildup → goal → celebration).
+const REPLAY_POSTROLL_MS = 4000;
+
 function captureVarBlob(cb) {
   const now = Date.now();
   let pick = -1, oldest = -1;
@@ -2379,42 +2462,60 @@ function captureVarBlob(cb) {
     const age = now - s.startTime;
     if (age > oldest) { oldest = age; pick = i; }
   }
-  if (pick < 0) { cb(null); return; }
+  if (pick < 0) { cb(null, 0); return; }
   const s = varRec[pick];
+  const goalOffsetMs = now - s.startTime; // where the trigger sits within the clip
   if (s.timer) { clearTimeout(s.timer); s.timer = null; }
   s.onFinalize = (blob) => {
     if (replaySectionStream && replaySectionActive) startVarSegment(replaySectionStream, pick);
-    cb(blob);
+    cb(blob, goalOffsetMs);
   };
-  try { s.recorder.stop(); } catch(e) { s.onFinalize = null; cb(null); }
+  // Roll the aftermath, THEN stop → clip = [start … goal(goalOffsetMs) … +postroll].
+  s.timer = setTimeout(() => {
+    s.timer = null;
+    if (s.recorder && s.recorder.state === 'recording') {
+      try { s.recorder.stop(); }
+      catch (e) { const f = s.onFinalize; s.onFinalize = null; if (f) f(null); }
+    } else {
+      const f = s.onFinalize; s.onFinalize = null; if (f) f(null);
+    }
+  }, REPLAY_POSTROLL_MS);
 }
 
 function stopReplayRecorder() {
   stopVarRecorder();
 }
 
-// Capture the footage ending EXACTLY at the trigger moment using the
-// dual-phase recorder pair (same as VAR). captureVarBlob stops whichever
-// recorder has been running longest and hands back a WebM whose final frame
-// is the trigger instant — so the goal/save is always shown, never cut off.
+// Capture the footage around the trigger using the dual-phase recorder pair
+// (same as VAR). captureVarBlob keeps rolling a few seconds of aftermath, then
+// hands back a WebM with the goal/save sitting MID-CLIP (build-up before,
+// celebration after) plus the offset of that moment within the clip.
+let replayCancelled = false;
+
 function captureReplay(showGoalFirst, silent) {
-  captureVarBlob((chosen) => {
-    if (!chosen) {
-      if (showGoalFirst) document.getElementById('goalPopup').classList.add('visible');
-      return;
-    }
+  replayCancelled = false;
+  // Stamp the exact live-match moment (to the millisecond) the reaction fired —
+  // i.e. when the fist/finger went up — captured NOW, at the trigger, not after
+  // the aftermath footage finishes recording.
+  const clockMs = (typeof matchClockMs === 'function') ? matchClockMs() : null;
+
+  // Show the GOAL prompt immediately — don't make the user wait for the
+  // aftermath footage to finish recording.
+  if (showGoalFirst && !silent) {
+    document.getElementById('goalPopup').classList.add('visible');
+  }
+
+  captureVarBlob((chosen, goalOffsetMs) => {
+    if (!chosen) return; // no footage; goal prompt (if any) is already up
 
     if (replayUrl) URL.revokeObjectURL(replayUrl);
     replayUrl = URL.createObjectURL(chosen);
+    replayGoalOffsetMs = goalOffsetMs;
 
-    // Save to highlights (same blob ending at the trigger, so the reel
-    // also runs all the way up to the goal/save).
+    // Save to highlights (clip carries build-up + goal + aftermath; goalOffsetMs
+    // tells the reel exactly where the goal lands so it can time the roar to it).
     if (highlightsEnabled) {
       const reactionType = currentReactionType || 'goal';
-      // Stamp the exact live-match moment (to the millisecond) the reaction
-      // fired — i.e. when the fist/finger went up. The clip ends at this
-      // instant, so in the reel the celebration is timed to line up with it.
-      const clockMs = (typeof matchClockMs === 'function') ? matchClockMs() : null;
       const entry = {
         type: reactionType,
         blob: chosen,
@@ -2423,6 +2524,7 @@ function captureReplay(showGoalFirst, silent) {
         scoreAfter: null,
         matchClockMs: clockMs,
         clockLabel: clockMs != null ? formatClock(clockMs) : null,
+        goalOffsetMs: goalOffsetMs,
       };
       saveHighlight(entry).then(id => {
         pendingHighlightId = (reactionType === 'goal') ? id : null;
@@ -2430,21 +2532,21 @@ function captureReplay(showGoalFirst, silent) {
       }).catch(() => {});
     }
 
-    if (silent) return; // Moment bookmark — saved to IDB only, no popup/replay.
+    if (silent || replayCancelled) return; // bookmark only, or user dismissed
 
     if (showGoalFirst) {
-      document.getElementById('goalPopup').classList.add('visible');
+      // GOAL prompt already up — hold it a beat, then run the goal-centred replay.
       replayTimerHandle = setTimeout(() => {
         replayTimerHandle = null;
         document.getElementById('goalPopup').classList.remove('visible');
         startReplaySequence();
-      }, 10000);
+      }, 6000);
     } else {
-      // Save/nearmiss: show replay after a short 5s pause
+      // Save/near-miss: show replay after a short pause.
       replayTimerHandle = setTimeout(() => {
         replayTimerHandle = null;
         startReplaySequence();
-      }, 5000);
+      }, 3000);
     }
   });
 }
