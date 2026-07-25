@@ -1,0 +1,67 @@
+name: SnapBend
+
+on:
+  push:
+    paths:
+      - 'snapbend/**'
+      - '.github/workflows/snapbend.yml'
+  pull_request:
+    paths:
+      - 'snapbend/**'
+      - '.github/workflows/snapbend.yml'
+  workflow_dispatch:
+
+jobs:
+  # The engine has no dependencies, so the maths that actually matters gets
+  # checked on a fast free runner on every push.
+  core-tests:
+    name: Core tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DSNAPBEND_BUILD_PLUGIN=OFF -DCMAKE_BUILD_TYPE=Release
+        working-directory: snapbend
+
+      - name: Build
+        run: cmake --build build -j 4
+        working-directory: snapbend
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+        working-directory: snapbend
+
+  # Builds the actual Audio Unit. macOS runners are free on public repos, so
+  # this produces an installable plugin without needing Xcode open locally.
+  build-au:
+    name: Build Audio Unit
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -G Xcode -DSNAPBEND_BUILD_PLUGIN=ON
+        working-directory: snapbend
+
+      - name: Build
+        run: cmake --build build --config Release -j 4
+        working-directory: snapbend
+
+      - name: Validate with auval
+        # Logic runs this before it will load anything, so a failure here means
+        # a failure there. Not fatal on CI, because the runner has no audio
+        # hardware and can report spurious warnings.
+        continue-on-error: true
+        run: |
+          killall -9 AudioComponentRegistrar || true
+          auval -v aumi Snb1 Snpb
+
+      - name: Upload the plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: SnapBend-AU
+          path: snapbend/build/SnapBend_artefacts/Release/AU/SnapBend.component
+          if-no-files-found: error

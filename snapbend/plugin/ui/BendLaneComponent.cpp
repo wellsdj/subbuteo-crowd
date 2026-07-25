@@ -1,0 +1,572 @@
+#include "BendLaneComponent.h"
+#include "SnapBendLookAndFeel.h"
+
+using namespace snapbend;
+
+namespace
+{
+    /** Left gutter where the semitone numbers live. */
+    constexpr float labelGutter = 46.0f;
+    constexpr float lanePadding = 10.0f;
+
+    /** Semitones that get a brighter line, because they are the ones people
+        actually bend to: octave, fifth, fourth, minor/major third, tone. */
+    bool isLandmarkInterval (int semitone)
+    {
+        const int s = std::abs (semitone);
+        return s == 0 || s == 2 || s == 3 || s == 4 || s == 5 || s == 7 || s == 12 || s == 24;
+    }
+
+    /** A deliberately sparse set of *labelled* intervals. Numbering every line
+        turns the gutter into a wall of digits; these are far enough apart to
+        read at a glance and are the ones you navigate by. */
+    bool isLabelledInterval (int semitone)
+    {
+        const int s = std::abs (semitone);
+        return s == 0 || s == 2 || s == 5 || s == 7 || s == 12 || s == 19 || s == 24;
+    }
+}
+
+BendLaneComponent::BendLaneComponent()
+{
+    setWantsKeyboardFocus (false);
+    setMouseCursor (juce::MouseCursor::CrosshairCursor);
+}
+
+BendLaneComponent::~BendLaneComponent() = default;
+
+void BendLaneComponent::setCurve (const snapbend::BendCurve& newCurve)
+{
+    curve = newCurve;
+    repaint();
+}
+
+void BendLaneComponent::setBendRange (double semitones)
+{
+    if (std::abs (bendRange - semitones) > 1.0e-9)
+    {
+        bendRange = semitones;
+        repaint();
+    }
+}
+
+void BendLaneComponent::setSnapStrength (double strength)
+{
+    snapStrength = juce::jlimit (0.0, 1.0, strength);
+}
+
+void BendLaneComponent::setShapeBias (double bias)
+{
+    if (std::abs (shapeBias - bias) > 1.0e-9)
+    {
+        shapeBias = bias;
+        repaint();
+    }
+}
+
+void BendLaneComponent::setPlayheadPosition (double beat, bool isPlaying)
+{
+    playheadBeat     = beat;
+    transportRunning = isPlaying;
+
+    // Follow the playhead when it leaves the window, so a long bend does not
+    // require chasing it by hand.
+    if (isPlaying && (beat < viewStartBeat || beat > viewStartBeat + visibleBeats))
+        viewStartBeat = std::floor (beat / visibleBeats) * visibleBeats;
+
+    repaint();
+}
+
+// ---------------------------------------------------------------------------
+// Coordinates
+// ---------------------------------------------------------------------------
+
+juce::Rectangle<float> BendLaneComponent::getLaneBounds() const
+{
+    return getLocalBounds().toFloat()
+             .withTrimmedLeft (labelGutter)
+             .reduced (0.0f, lanePadding);
+}
+
+double BendLaneComponent::getDisplayRange() const
+{
+    // A little past the allowed range, so there is always visible territory
+    // beyond what the synth can reach — that shaded band is what teaches the
+    // limit. Only a little, though: shading half the grid makes the whole lane
+    // look dirty and buries the curve.
+    return juce::jlimit (3.0, 48.0, bendRange * 1.35);
+}
+
+float BendLaneComponent::beatToX (double beat) const
+{
+    const auto lane = getLaneBounds();
+    const double proportion = (beat - viewStartBeat) / visibleBeats;
+
+    return lane.getX() + static_cast<float> (proportion) * lane.getWidth();
+}
+
+double BendLaneComponent::xToBeat (float x) const
+{
+    const auto lane = getLaneBounds();
+
+    if (lane.getWidth() <= 0.0f)
+        return viewStartBeat;
+
+    return viewStartBeat + ((x - lane.getX()) / lane.getWidth()) * visibleBeats;
+}
+
+float BendLaneComponent::semitoneToY (double semitones) const
+{
+    const auto lane = getLaneBounds();
+    const double proportion = (semitones / getDisplayRange() + 1.0) * 0.5; // 0 at bottom, 1 at top
+
+    return lane.getBottom() - static_cast<float> (proportion) * lane.getHeight();
+}
+
+double BendLaneComponent::yToSemitone (float y) const
+{
+    const auto lane = getLaneBounds();
+
+    if (lane.getHeight() <= 0.0f)
+        return 0.0;
+
+    const double proportion = (lane.getBottom() - y) / lane.getHeight();
+    return (proportion * 2.0 - 1.0) * getDisplayRange();
+}
+
+// ---------------------------------------------------------------------------
+// Snapping
+// ---------------------------------------------------------------------------
+
+double BendLaneComponent::applySnapToSemitone (double raw, bool snapDisabled) const
+{
+    if (snapDisabled)
+        return raw;
+
+    return snapbend::BendCurve::snapToSemitone (raw, snapStrength);
+}
+
+double BendLaneComponent::applySnapToBeat (double raw, bool snapDisabled) const
+{
+    if (snapDisabled)
+        return raw;
+
+    return snapbend::BendCurve::snapToGrid (raw, beatGrid);
+}
+
+// ---------------------------------------------------------------------------
+// Hit testing
+// ---------------------------------------------------------------------------
+
+int BendLaneComponent::findNodeAt (juce::Point<float> position) const
+{
+    const auto& nodes = curve.getNodes();
+
+    for (int i = static_cast<int> (nodes.size()) - 1; i >= 0; --i)
+    {
+        const juce::Point<float> nodePoint { beatToX (nodes[static_cast<size_t> (i)].beat),
+                                             semitoneToY (nodes[static_cast<size_t> (i)].semitones) };
+
+        if (nodePoint.getDistanceFrom (position) <= nodeHitRadius)
+            return i;
+    }
+
+    return -1;
+}
+
+int BendLaneComponent::findSegmentAt (juce::Point<float> position) const
+{
+    const auto& nodes = curve.getNodes();
+
+    if (nodes.size() < 2)
+        return -1;
+
+    const double beat = xToBeat (position.x);
+
+    for (size_t i = 0; i + 1 < nodes.size(); ++i)
+    {
+        if (beat >= nodes[i].beat && beat <= nodes[i + 1].beat)
+        {
+            const float curveY = semitoneToY (curve.valueAtBeat (beat, shapeBias));
+
+            // Only counts as grabbing the line if the pointer is near it.
+            if (std::abs (curveY - position.y) <= 8.0f)
+                return static_cast<int> (i);
+
+            return -1;
+        }
+    }
+
+    return -1;
+}
+
+// ---------------------------------------------------------------------------
+// Mouse
+// ---------------------------------------------------------------------------
+
+void BendLaneComponent::mouseDown (const juce::MouseEvent& event)
+{
+    const auto position = event.position;
+
+    // Holding alt escapes the grid entirely, for bends that deliberately sit
+    // just under the note.
+    const bool snapDisabled = event.mods.isAltDown();
+
+    const int node = findNodeAt (position);
+
+    if (node >= 0)
+    {
+        dragMode  = DragMode::node;
+        dragIndex = node;
+        return;
+    }
+
+    const int segment = findSegmentAt (position);
+
+    if (segment >= 0)
+    {
+        // Grabbing the line between two points bends it, exactly like dragging
+        // the middle of a Logic automation ramp.
+        dragMode       = DragMode::shape;
+        dragIndex      = segment;
+        dragStartShape = curve.getNodes()[static_cast<size_t> (segment)].shape;
+        dragStartY     = position.y;
+        setMouseCursor (juce::MouseCursor::UpDownResizeCursor);
+        return;
+    }
+
+    // Empty space: drop a new point here and start dragging it immediately.
+    const double beat      = applySnapToBeat (xToBeat (position.x), snapDisabled);
+    const double semitones = applySnapToSemitone (yToSemitone (position.y), snapDisabled);
+
+    dragIndex = static_cast<int> (curve.addNode ({ beat, semitones, 0.0 }));
+    dragMode  = DragMode::node;
+
+    notifyCurveChanged();
+    repaint();
+}
+
+void BendLaneComponent::mouseDrag (const juce::MouseEvent& event)
+{
+    if (dragIndex < 0)
+        return;
+
+    const bool snapDisabled = event.mods.isAltDown();
+
+    if (dragMode == DragMode::node)
+    {
+        const double beat      = applySnapToBeat (xToBeat (event.position.x), snapDisabled);
+        const double semitones = juce::jlimit (-getDisplayRange(), getDisplayRange(),
+                                               applySnapToSemitone (yToSemitone (event.position.y),
+                                                                    snapDisabled));
+
+        dragIndex = static_cast<int> (curve.moveNode (static_cast<size_t> (dragIndex),
+                                                      beat, semitones));
+
+        notifyCurveChanged();
+        repaint();
+    }
+    else if (dragMode == DragMode::shape)
+    {
+        const auto& nodes = curve.getNodes();
+
+        if (static_cast<size_t> (dragIndex) + 1 >= nodes.size())
+            return;
+
+        // Dragging up always bulges the line upwards, whether the bend is going
+        // up or down — which means the sign flips for a falling segment.
+        const double direction = nodes[static_cast<size_t> (dragIndex) + 1].semitones
+                                     >= nodes[static_cast<size_t> (dragIndex)].semitones
+                               ? 1.0 : -1.0;
+
+        const double delta = (dragStartY - event.position.y) * 0.012 * direction;
+
+        curve.setNodeShape (static_cast<size_t> (dragIndex), dragStartShape + delta);
+
+        notifyCurveChanged();
+        repaint();
+    }
+}
+
+void BendLaneComponent::mouseUp (const juce::MouseEvent&)
+{
+    dragMode  = DragMode::none;
+    dragIndex = -1;
+    setMouseCursor (juce::MouseCursor::CrosshairCursor);
+}
+
+void BendLaneComponent::mouseMove (const juce::MouseEvent& event)
+{
+    const int node    = findNodeAt (event.position);
+    const int segment = node >= 0 ? -1 : findSegmentAt (event.position);
+
+    if (node != hoverNode || segment != hoverSegment)
+    {
+        hoverNode    = node;
+        hoverSegment = segment;
+
+        setMouseCursor (node >= 0    ? juce::MouseCursor::DraggingHandCursor
+                      : segment >= 0 ? juce::MouseCursor::UpDownResizeCursor
+                                     : juce::MouseCursor::CrosshairCursor);
+        repaint();
+    }
+}
+
+void BendLaneComponent::mouseDoubleClick (const juce::MouseEvent& event)
+{
+    const int node = findNodeAt (event.position);
+
+    if (node >= 0)
+    {
+        curve.removeNode (static_cast<size_t> (node));
+        hoverNode = -1;
+
+        notifyCurveChanged();
+        repaint();
+    }
+}
+
+void BendLaneComponent::mouseExit (const juce::MouseEvent&)
+{
+    if (hoverNode >= 0 || hoverSegment >= 0)
+    {
+        hoverNode    = -1;
+        hoverSegment = -1;
+        repaint();
+    }
+}
+
+void BendLaneComponent::notifyCurveChanged()
+{
+    if (onCurveChanged != nullptr)
+        onCurveChanged (curve);
+}
+
+void BendLaneComponent::resized()
+{
+    repaint();
+}
+
+// ---------------------------------------------------------------------------
+// Painting
+// ---------------------------------------------------------------------------
+
+void BendLaneComponent::paint (juce::Graphics& g)
+{
+    const auto lane = getLaneBounds();
+
+    g.setColour (colours::panel);
+    g.fillRoundedRectangle (getLocalBounds().toFloat(), 6.0f);
+
+    drawOutOfRangeZones (g, lane);
+    drawBeatGrid (g, lane);
+    drawSemitoneGrid (g, lane);
+
+    if (curve.isEmpty())
+        drawEmptyHint (g, lane);
+    else
+        drawCurve (g, lane);
+
+    drawNodes (g);
+    drawPlayhead (g, lane);
+}
+
+void BendLaneComponent::drawOutOfRangeZones (juce::Graphics& g, juce::Rectangle<float> lane) const
+{
+    const float topLimit    = semitoneToY (bendRange);
+    const float bottomLimit = semitoneToY (-bendRange);
+
+    // Everything above and below these lines is out of the synth's reach. It is
+    // shaded rather than blocked, because drawing there is how you discover you
+    // need a wider range — and that is when the prompt appears.
+    g.setColour (colours::outOfRange);
+    g.fillRect (lane.withBottom (topLimit));
+    g.fillRect (lane.withTop (bottomLimit));
+
+    g.setColour (colours::warning.withAlpha (0.35f));
+
+    const float dashes[] = { 4.0f, 4.0f };
+
+    g.drawDashedLine ({ lane.getX(), topLimit, lane.getRight(), topLimit }, dashes, 2, 1.0f);
+    g.drawDashedLine ({ lane.getX(), bottomLimit, lane.getRight(), bottomLimit }, dashes, 2, 1.0f);
+}
+
+void BendLaneComponent::drawSemitoneGrid (juce::Graphics& g, juce::Rectangle<float> lane) const
+{
+    const int limit = static_cast<int> (std::floor (getDisplayRange()));
+
+    // When the whole range is small every line can be numbered without
+    // crowding; once it grows, fall back to the sparse landmark set.
+    const float pixelsPerSemitone = lane.getHeight() / static_cast<float> (2 * limit + 1);
+    const bool  labelEverySemitone = pixelsPerSemitone >= 16.0f;
+
+    for (int semitone = -limit; semitone <= limit; ++semitone)
+    {
+        const float y = semitoneToY (semitone);
+
+        if (y < lane.getY() - 1.0f || y > lane.getBottom() + 1.0f)
+            continue;
+
+        const bool landmark = isLandmarkInterval (semitone);
+        const bool centre   = semitone == 0;
+
+        g.setColour (centre   ? colours::gridLineBold.brighter (0.25f)
+                   : landmark ? colours::gridLineBold
+                              : colours::gridLine);
+
+        g.fillRect (lane.getX(), y, lane.getWidth(), centre ? 1.4f : 1.0f);
+
+        if (labelEverySemitone || isLabelledInterval (semitone))
+        {
+            g.setColour (centre ? colours::text : colours::textDim);
+            g.setFont (juce::Font (juce::FontOptions (centre ? 11.5f : 10.5f,
+                                                      centre ? juce::Font::bold : juce::Font::plain)));
+
+            const auto label = semitone > 0 ? "+" + juce::String (semitone)
+                                            : juce::String (semitone);
+
+            g.drawText (label,
+                        juce::Rectangle<float> (0.0f, y - 8.0f, labelGutter - 8.0f, 16.0f),
+                        juce::Justification::centredRight, false);
+        }
+    }
+}
+
+void BendLaneComponent::drawBeatGrid (juce::Graphics& g, juce::Rectangle<float> lane) const
+{
+    const double firstBeat = std::floor (viewStartBeat);
+
+    for (double beat = firstBeat; beat <= viewStartBeat + visibleBeats; beat += 1.0)
+    {
+        const float x = beatToX (beat);
+
+        if (x < lane.getX() - 1.0f || x > lane.getRight() + 1.0f)
+            continue;
+
+        const bool barLine = std::fmod (std::abs (beat), static_cast<double> (beatsPerBar)) < 1.0e-6;
+
+        g.setColour (barLine ? colours::gridLineBold : colours::gridLine);
+        g.fillRect (x, lane.getY(), barLine ? 1.4f : 1.0f, lane.getHeight());
+    }
+}
+
+void BendLaneComponent::drawCurve (juce::Graphics& g, juce::Rectangle<float> lane) const
+{
+    const auto& nodes = curve.getNodes();
+
+    if (nodes.empty())
+        return;
+
+    juce::Path path;
+
+    // Sampled per pixel, using exactly the same evaluation the audio thread
+    // uses — so what is drawn is what is played, shape knob included.
+    const int steps = juce::jmax (2, static_cast<int> (lane.getWidth()));
+
+    for (int i = 0; i <= steps; ++i)
+    {
+        const float  x     = lane.getX() + (lane.getWidth() * i) / static_cast<float> (steps);
+        const double beat  = xToBeat (x);
+        const float  y     = semitoneToY (curve.valueAtBeat (beat, shapeBias));
+
+        if (i == 0)
+            path.startNewSubPath (x, y);
+        else
+            path.lineTo (x, y);
+    }
+
+    // A soft fill back to the centre line gives the lane some weight without
+    // shouting.
+    juce::Path fill = path;
+    fill.lineTo (lane.getRight(), semitoneToY (0.0));
+    fill.lineTo (lane.getX(), semitoneToY (0.0));
+    fill.closeSubPath();
+
+    g.setColour (colours::accentSoft);
+    g.fillPath (fill);
+
+    g.setColour (colours::accent);
+    g.strokePath (path, juce::PathStrokeType (2.0f, juce::PathStrokeType::curved,
+                                              juce::PathStrokeType::rounded));
+}
+
+void BendLaneComponent::drawNodes (juce::Graphics& g) const
+{
+    const auto& nodes = curve.getNodes();
+
+    for (size_t i = 0; i < nodes.size(); ++i)
+    {
+        const juce::Point<float> centre { beatToX (nodes[i].beat), semitoneToY (nodes[i].semitones) };
+        const bool hovered = static_cast<int> (i) == hoverNode;
+        const bool beyondRange = std::abs (nodes[i].semitones) > bendRange + 1.0e-6;
+
+        const float radius = hovered ? nodeRadius + 2.0f : nodeRadius;
+
+        g.setColour (colours::background);
+        g.fillEllipse (juce::Rectangle<float> (radius * 2.0f + 3.0f, radius * 2.0f + 3.0f)
+                           .withCentre (centre));
+
+        // A point the synth cannot reach is drawn in the warning colour, so the
+        // problem is visible on the grid and not only in the prompt.
+        g.setColour (beyondRange ? colours::warning : colours::accent);
+        g.fillEllipse (juce::Rectangle<float> (radius * 2.0f, radius * 2.0f).withCentre (centre));
+
+        if (hovered)
+        {
+            g.setColour (colours::text);
+            g.setFont (juce::Font (juce::FontOptions (11.0f)));
+
+            const double value = nodes[i].semitones;
+            const bool   whole = std::abs (value - std::round (value)) < 0.005;
+
+            const auto readout = juce::String (value >= 0.0 ? "+" : "-")
+                               + juce::String (std::abs (value), whole ? 0 : 2)
+                               + " st";
+
+            g.drawText (readout,
+                        juce::Rectangle<float> (centre.x - 40.0f, centre.y - 26.0f, 80.0f, 14.0f),
+                        juce::Justification::centred, false);
+        }
+    }
+}
+
+void BendLaneComponent::drawPlayhead (juce::Graphics& g, juce::Rectangle<float> lane) const
+{
+    if (! transportRunning)
+        return;
+
+    const float x = beatToX (playheadBeat);
+
+    if (x < lane.getX() || x > lane.getRight())
+        return;
+
+    g.setColour (colours::playhead.withAlpha (0.55f));
+    g.fillRect (x, lane.getY(), 1.0f, lane.getHeight());
+
+    // A dot riding the curve, so you can see the bend happening.
+    if (! curve.isEmpty())
+    {
+        const float y = semitoneToY (curve.valueAtBeat (playheadBeat, shapeBias));
+
+        g.setColour (colours::playhead);
+        g.fillEllipse (juce::Rectangle<float> (7.0f, 7.0f).withCentre ({ x, y }));
+    }
+}
+
+void BendLaneComponent::drawEmptyHint (juce::Graphics& g, juce::Rectangle<float> lane) const
+{
+    g.setColour (colours::textDim.withAlpha (0.75f));
+    g.setFont (juce::Font (juce::FontOptions (13.0f)));
+
+    g.drawText ("Click anywhere to add a bend point",
+                lane.withHeight (24.0f).withY (lane.getCentreY() - 24.0f),
+                juce::Justification::centred, false);
+
+    g.setColour (colours::textDim.withAlpha (0.5f));
+    g.setFont (juce::Font (juce::FontOptions (11.5f)));
+
+    g.drawText ("Drag a point to move it  ·  drag the line between two points to curve it  "
+                "·  double-click a point to remove it  ·  hold Alt to ignore the grid",
+                lane.withHeight (20.0f).withY (lane.getCentreY() + 4.0f),
+                juce::Justification::centred, false);
+}

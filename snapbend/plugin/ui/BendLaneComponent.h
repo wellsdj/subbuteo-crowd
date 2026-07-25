@@ -1,0 +1,111 @@
+#pragma once
+
+#include <juce_gui_basics/juce_gui_basics.h>
+
+#include "../../core/BendCurve.h"
+
+/** The bend lane: a semitone grid you draw pitch bend curves onto.
+
+    Horizontal lines are semitones, and points snap to them, so a bend lands on
+    a real interval instead of somewhere approximately musical. The area beyond
+    the synth's allowed range is shaded, so it is obvious *before* you hear it
+    that a bend is out of reach.
+*/
+class BendLaneComponent : public juce::Component
+{
+public:
+    BendLaneComponent();
+    ~BendLaneComponent() override;
+
+    void setCurve (const snapbend::BendCurve& newCurve);
+    const snapbend::BendCurve& getCurve() const noexcept { return curve; }
+
+    /** The synth's allowed range, in semitones — drives the shaded zone. */
+    void setBendRange (double semitones);
+
+    /** 1 = hard snap to whole semitones, 0 = free. */
+    void setSnapStrength (double strength);
+
+    /** Global lean applied by the CURVE knob, so the drawn line matches what
+        will actually be played. */
+    void setShapeBias (double bias);
+
+    void setPlayheadPosition (double beat, bool isPlaying);
+
+    /** Called whenever the user edits the curve. */
+    std::function<void (const snapbend::BendCurve&)> onCurveChanged;
+
+    void paint (juce::Graphics&) override;
+    void resized() override;
+
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
+    void mouseUp (const juce::MouseEvent&) override;
+    void mouseMove (const juce::MouseEvent&) override;
+    void mouseDoubleClick (const juce::MouseEvent&) override;
+    void mouseExit (const juce::MouseEvent&) override;
+
+private:
+    // ---- coordinate mapping --------------------------------------------
+
+    juce::Rectangle<float> getLaneBounds() const;
+
+    float  beatToX (double beat) const;
+    double xToBeat (float x) const;
+    float  semitoneToY (double semitones) const;
+    double yToSemitone (float y) const;
+
+    /** How many semitones are visible above and below the centre line. Always
+        leaves headroom past the allowed range, so the shaded out-of-reach zone
+        is visible and reachable rather than hidden off screen. */
+    double getDisplayRange() const;
+
+    // ---- hit testing ----------------------------------------------------
+
+    int findNodeAt (juce::Point<float> position) const;
+    int findSegmentAt (juce::Point<float> position) const;
+
+    // ---- drawing --------------------------------------------------------
+
+    void drawSemitoneGrid (juce::Graphics&, juce::Rectangle<float> lane) const;
+    void drawBeatGrid (juce::Graphics&, juce::Rectangle<float> lane) const;
+    void drawOutOfRangeZones (juce::Graphics&, juce::Rectangle<float> lane) const;
+    void drawCurve (juce::Graphics&, juce::Rectangle<float> lane) const;
+    void drawNodes (juce::Graphics&) const;
+    void drawPlayhead (juce::Graphics&, juce::Rectangle<float> lane) const;
+    void drawEmptyHint (juce::Graphics&, juce::Rectangle<float> lane) const;
+
+    double applySnapToSemitone (double raw, bool snapDisabled) const;
+    double applySnapToBeat (double raw, bool snapDisabled) const;
+
+    void notifyCurveChanged();
+
+    // ---- state ----------------------------------------------------------
+
+    snapbend::BendCurve curve;
+
+    double bendRange     = 12.0;
+    double snapStrength  = 1.0;
+    double shapeBias     = 0.0;
+    double playheadBeat  = 0.0;
+    bool   transportRunning = false;
+
+    double viewStartBeat = 0.0;
+    double visibleBeats  = 16.0;
+    double beatGrid      = 0.25;   ///< sixteenth notes
+    int    beatsPerBar   = 4;
+
+    enum class DragMode { none, node, shape };
+
+    DragMode dragMode      = DragMode::none;
+    int      dragIndex     = -1;
+    int      hoverNode     = -1;
+    int      hoverSegment  = -1;
+    double   dragStartShape = 0.0;
+    float    dragStartY     = 0.0f;
+
+    static constexpr float nodeRadius   = 5.0f;
+    static constexpr float nodeHitRadius = 10.0f;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BendLaneComponent)
+};
