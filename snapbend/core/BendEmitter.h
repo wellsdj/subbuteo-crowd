@@ -20,8 +20,22 @@ namespace snapbend
 
 struct EmitterSettings
 {
+    /** When false the emitter is completely silent: no bend, no range
+        handshake, nothing. A plugin that is not being used must not alter a
+        single byte of the MIDI passing through it. */
+    bool enabled = true;
+
     /** Semitone range we ask the synth for, and assume when converting. */
     double bendRangeSemitones = 12.0;
+
+    /** Trim, in cents at full bend, for synths whose real bend range does not
+        quite match what they claim.
+
+        A range mismatch produces an error proportional to how far you have
+        bent — nothing at rest, worst at the extremes — so this is applied as a
+        scale rather than a fixed offset. That way nulling it at full bend
+        nulls it everywhere. */
+    double fineTuneCents = 0.0;
 
     /** The Mix knob: scales the whole curve. 0 = dry/no bend, 1 = as drawn. */
     double depth = 1.0;
@@ -36,9 +50,14 @@ struct EmitterSettings
     /** MIDI channel to send on, 1-16. */
     int channel = 1;
 
-    /** Whether to transmit the RPN range handshake. Off for synths that
-        mis-handle RPN and are configured by hand instead. */
-    bool sendRangeRPN = true;
+    /** Whether to transmit the RPN range handshake.
+
+        Off by default, and deliberately so. The handshake is carried on CC 6
+        and CC 38, and a synth that does not implement RPN will happily apply
+        those to whatever they are mapped to instead — changing the patch's
+        filter, envelope or macros the moment the plugin loads. Opt in only
+        when the synth is known to handle RPN. */
+    bool sendRangeRPN = false;
 };
 
 struct TransportInfo
@@ -75,6 +94,7 @@ private:
     int             lastSentBend  = -1;    ///< -1 means "nothing sent yet"
     bool            wasPlaying    = false;
     bool            rangeSent     = false;
+    bool            wasEnabled    = false; ///< so switching off can un-bend the synth exactly once
 };
 
 } // namespace snapbend

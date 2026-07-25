@@ -62,6 +62,12 @@ private:
     ZoomControls      zoomControls;
 
     LabelledKnob rangeKnob { "RANGE", [] (double v) { return juce::String (juce::roundToInt (v)) + " st"; } };
+    LabelledKnob fineKnob  { "FINE",  [] (double v)
+                             {
+                                 const int cents = juce::roundToInt (v);
+                                 if (cents == 0) return juce::String ("0");
+                                 return (cents > 0 ? "+" : "") + juce::String (cents) + " c";
+                             } };
     LabelledKnob curveKnob { "CURVE", [] (double v)
                              {
                                  if (std::abs (v) < 0.02) return juce::String ("Linear");
@@ -76,7 +82,7 @@ private:
                              } };
     LabelledKnob mixKnob   { "MIX",   [] (double v) { return juce::String (juce::roundToInt (v * 100.0)) + "%"; } };
 
-    juce::ToggleButton autoRangeButton { "Tell the synth its bend range automatically" };
+    juce::ToggleButton autoRangeButton { "Send bend range to synth" };
 
     // Two separate jobs that were previously conflated under one "Reset bend"
     // button: throwing away the drawn points, and un-bending a stuck synth.
@@ -86,7 +92,7 @@ private:
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
 
-    std::unique_ptr<SliderAttachment> rangeAttachment, curveAttachment,
+    std::unique_ptr<SliderAttachment> rangeAttachment, fineAttachment, curveAttachment,
                                       snapAttachment, mixAttachment;
     std::unique_ptr<ButtonAttachment> autoRangeAttachment;
 

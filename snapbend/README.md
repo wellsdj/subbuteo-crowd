@@ -29,11 +29,39 @@ Nearly every synth ignores large bends unless you ask permission first. Out of
 the box the MIDI standard allows **±2 semitones**, so a drawn 7-semitone bend
 comes out around 1.2 and the plugin looks broken.
 
-SnapBend transmits an **RPN 0,0 (Pitch Bend Sensitivity)** message to set the
-synth's range before it sends anything, and re-sends it whenever playback starts
-or the range changes. If you drag a bend past what the synth has been allowed,
-a prompt appears telling you — in plain words — to go and raise the range in the
-synth itself, with a button that widens SnapBend's own setting to match.
+SnapBend can transmit an **RPN 0,0 (Pitch Bend Sensitivity)** message to set the
+synth's range for you, but **this is off by default and usually should stay
+off**. The handshake is carried on **CC 6** and **CC 38**, and a synth that does
+not implement RPN does not ignore those messages — it applies them to whatever
+they happen to be mapped to on that patch. The result is a filter, envelope or
+macro moving the instant the plugin loads, which sounds like the plugin has
+ruined your patch. It has.
+
+So the reliable route is to **set the bend range in the synth by hand** and put
+the same number in the RANGE knob. Turn the handshake on only for synths you
+know handle RPN properly.
+
+If you drag a bend past what the synth has been allowed, a prompt appears
+telling you — in plain words — to go and raise the range in the synth itself.
+
+### It does nothing at all when it is doing nothing
+
+With no points drawn, or MIX at zero, SnapBend passes MIDI through completely
+untouched: no pitch bend, no handshake, not one byte added or removed. The
+instrument sounds exactly as it does with the plugin taken off the strip.
+
+This matters beyond tidiness — it previously swallowed pitch bend coming from
+the region or your keyboard even while idle.
+
+### If the semitones are slightly out
+
+Bend all the way down, hold it, and compare against the note a semitone-count
+lower on the keyboard. If it is a little sharp or flat, the synth's real bend
+range is not quite what it claims.
+
+Turn **FINE** until it is in tune. The trim is applied as a scale rather than a
+fixed offset, because a range mismatch is worst at the extremes and vanishes at
+the centre — so nulling it at full bend nulls it at every depth.
 
 The other classic failures are handled too:
 
@@ -49,13 +77,14 @@ The other classic failures are handled too:
 
 | Knob | What it does |
 | --- | --- |
-| **RANGE** | How far the synth is allowed to bend, 1–48 semitones. Also what gets transmitted to the synth. |
+| **RANGE** | How far the synth is allowed to bend, 1–48 semitones. Set this to match what the synth is set to. |
+| **FINE** | Corrects a synth whose real bend range does not quite match its setting. Measured in cents at full bend. |
 | **CURVE** | Leans every slide towards moving early or late, without editing any points. |
 | **SNAP** | Fully clockwise locks to whole semitones. Anticlockwise loosens it, for bends that deliberately sit just under the note. |
 | **MIX** | Scales the whole effect, 0% to 100%. |
 
-**Tell the synth its bend range automatically** — leave this on unless you have
-a synth that mishandles RPN and you would rather set its range by hand.
+**Send bend range to synth** — **off by default, and it should usually stay
+off.** See below.
 
 **Clear points** — throws away the whole curve and starts again.
 

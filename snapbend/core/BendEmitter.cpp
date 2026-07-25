@@ -17,6 +17,7 @@ void BendEmitter::reset()
     lastSentBend = -1;
     wasPlaying   = false;
     rangeSent    = false;
+    wasEnabled   = false;
 }
 
 void BendEmitter::setSettings (const EmitterSettings& newSettings)
@@ -30,6 +31,7 @@ void BendEmitter::setSettings (const EmitterSettings& newSettings)
                                               maxBendRangeSemitones);
     settings.depth            = std::clamp (settings.depth, 0.0, 1.0);
     settings.shapeBias        = std::clamp (settings.shapeBias, -1.0, 1.0);
+    settings.fineTuneCents    = std::clamp (settings.fineTuneCents, -100.0, 100.0);
     settings.channel          = std::clamp (settings.channel, 1, 16);
     settings.updateIntervalMs = std::max (0.1, settings.updateIntervalMs);
 
@@ -56,6 +58,32 @@ std::vector<RawMidiEvent> BendEmitter::processBlock (const BendCurve&     curve,
 
     if (numSamples <= 0)
         return events;
+
+    // ---- switched off ------------------------------------------------------
+    //
+    // Nothing drawn, or the mix at zero. The plugin must then be completely
+    // invisible: not one byte on the wire, so the instrument sounds exactly as
+    // it does with the plugin removed. The only exception is the single
+    // centring message needed to undo a bend we ourselves applied.
+    if (! settings.enabled)
+    {
+        if (wasEnabled)
+        {
+            if (lastSentBend != pitchBendCentre)
+                events.push_back (makeCentredBend (settings.channel, 0));
+
+            lastSentBend = pitchBendCentre;
+            wasEnabled   = false;
+        }
+
+        // Make sure switching back on re-announces everything from scratch.
+        rangeSent  = false;
+        wasPlaying = false;
+
+        return events;
+    }
+
+    wasEnabled = true;
 
     // ---- transport stopped -------------------------------------------------
     if (! transport.isPlaying)
@@ -98,12 +126,20 @@ std::vector<RawMidiEvent> BendEmitter::processBlock (const BendCurve&     curve,
 
     // Always evaluate the final sample of the block as well as the grid points,
     // so a bend that lands exactly on a block boundary is not left a step short.
+    // A synth whose real bend range differs from the one it reports is wrong by
+    // an amount proportional to the bend — inaudible near the centre, worst at
+    // the extremes. So the trim scales the curve rather than offsetting it, and
+    // nulling it at full bend nulls it at every depth.
+    const double fineScale = 1.0 + settings.fineTuneCents
+                                     / (100.0 * settings.bendRangeSemitones);
+
     for (double pos = 0.0; pos < static_cast<double> (numSamples); pos += intervalSamples)
     {
         const int offset = static_cast<int> (pos);
 
         const double beat  = transport.ppqPosition + (pos / sampleRate) * quartersPerSec;
-        const double value = curve.valueAtBeat (beat, settings.shapeBias) * settings.depth;
+        const double value = curve.valueAtBeat (beat, settings.shapeBias)
+                                 * settings.depth * fineScale;
         const int    bend  = semitonesToPitchBend (value, settings.bendRangeSemitones);
 
         if (bend != lastSentBend)

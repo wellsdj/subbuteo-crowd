@@ -4,6 +4,7 @@
 namespace ids
 {
     const juce::String range = "range";
+    const juce::String fine  = "fine";
     const juce::String curve = "curve";
     const juce::String snap  = "snap";
     const juce::String mix   = "mix";
@@ -24,6 +25,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout SnapBendProcessor::createPar
         NormalisableRange<float> (1.0f, 48.0f, 1.0f), 12.0f,
         AudioParameterFloatAttributes().withLabel ("semitones")));
 
+    // Corrects a synth whose real bend range does not match the one it claims.
+    // Expressed in cents at full bend, because that is where you can hear it
+    // and therefore where you will be listening while you set it.
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { ids::fine, 1 }, "Fine",
+        NormalisableRange<float> (-100.0f, 100.0f, 1.0f), 0.0f,
+        AudioParameterFloatAttributes().withLabel ("cents")));
+
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { ids::curve, 1 }, "Curve",
         NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f));
@@ -36,8 +45,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout SnapBendProcessor::createPar
         ParameterID { ids::mix, 1 }, "Mix",
         NormalisableRange<float> (0.0f, 1.0f, 0.01f), 1.0f));
 
+    // Off by default: this is carried on CC 6 and CC 38, and synths that do not
+    // implement RPN will apply those to whatever they happen to be mapped to,
+    // altering the patch the moment the plugin loads.
     layout.add (std::make_unique<AudioParameterBool> (
-        ParameterID { ids::rpn, 1 }, "Auto Set Synth Range", true));
+        ParameterID { ids::rpn, 1 }, "Send Bend Range To Synth", false));
 
     return layout;
 }
@@ -108,11 +120,22 @@ void SnapBendProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     currentBeat.store (transport.ppqPosition);
     transportRunning.store (transport.isPlaying);
 
+    const auto localCurve = getCurve();
+
+    // With nothing drawn, or the mix all the way down, there is no bend to
+    // apply — and in that state the plugin must be acoustically invisible. It
+    // sends nothing, and just as importantly it stops interfering with the
+    // pitch bend already in the track or coming from your keyboard.
+    const double mix    = apvts.getRawParameterValue (ids::mix)->load();
+    const bool   active = ! localCurve.isEmpty() && mix > 0.0;
+
     // ---- push the current knob positions into the emitter ---------------
     snapbend::EmitterSettings settings;
+    settings.enabled            = active;
     settings.bendRangeSemitones = apvts.getRawParameterValue (ids::range)->load();
+    settings.fineTuneCents      = apvts.getRawParameterValue (ids::fine)->load();
     settings.shapeBias          = apvts.getRawParameterValue (ids::curve)->load();
-    settings.depth              = apvts.getRawParameterValue (ids::mix)->load();
+    settings.depth              = mix;
     settings.sendRangeRPN       = apvts.getRawParameterValue (ids::rpn)->load() > 0.5f;
     settings.channel            = 1;
     emitter.setSettings (settings);
@@ -124,15 +147,14 @@ void SnapBendProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     {
         const auto message = metadata.getMessage();
 
-        // We own the pitch bend on this channel. Letting the region's own bend
-        // through as well means two sources fighting, which reads as jitter.
-        if (message.isPitchWheel())
+        // While a bend is being applied we own the pitch wheel on this channel:
+        // letting the region's own bend through as well means two sources
+        // fighting, which reads as jitter. While idle we touch nothing.
+        if (active && message.isPitchWheel())
             continue;
 
         output.addEvent (message, metadata.samplePosition);
     }
-
-    const auto localCurve = getCurve();
 
     auto events = safetyResetPending.exchange (false)
                     ? emitter.makeSafetyReset()

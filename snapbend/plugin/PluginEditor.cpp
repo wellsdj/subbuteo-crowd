@@ -76,6 +76,7 @@ SnapBendEditor::SnapBendEditor (SnapBendProcessor& p)
 
     addAndMakeVisible (bendLane);
     addAndMakeVisible (rangeKnob);
+    addAndMakeVisible (fineKnob);
     addAndMakeVisible (curveKnob);
     addAndMakeVisible (snapKnob);
     addAndMakeVisible (mixKnob);
@@ -137,7 +138,19 @@ SnapBendEditor::SnapBendEditor (SnapBendProcessor& p)
 
     bendLane.setZoom (processor.getHorizontalZoom(), processor.getVerticalZoom());
 
+    autoRangeButton.setTooltip (
+        "Sends the bend range to the synth over MIDI (RPN, on CC 6 and CC 38).\n\n"
+        "Leave this off unless you know the synth handles RPN: those CCs will "
+        "otherwise be applied to whatever they are mapped to, which can change "
+        "the patch. With it off, set the bend range in the synth by hand.");
+
+    fineKnob.getSlider().setTooltip (
+        "Corrects a synth whose real bend range does not quite match its "
+        "setting. Bend all the way down, then turn this until the note is in "
+        "tune — measured in cents at full bend.");
+
     rangeAttachment = std::make_unique<SliderAttachment> (processor.apvts, "range", rangeKnob.getSlider());
+    fineAttachment  = std::make_unique<SliderAttachment> (processor.apvts, "fine",  fineKnob.getSlider());
     curveAttachment = std::make_unique<SliderAttachment> (processor.apvts, "curve", curveKnob.getSlider());
     snapAttachment  = std::make_unique<SliderAttachment> (processor.apvts, "snap",  snapKnob.getSlider());
     mixAttachment   = std::make_unique<SliderAttachment> (processor.apvts, "mix",   mixKnob.getSlider());
@@ -169,6 +182,7 @@ void SnapBendEditor::timerCallback()
     bendLane.setShapeBias (curve);
 
     rangeKnob.updateReadout();
+    fineKnob.updateReadout();
     curveKnob.updateReadout();
     snapKnob.updateReadout();
     mixKnob.updateReadout();
@@ -246,8 +260,8 @@ void SnapBendEditor::resized()
     // knob is centred in its own, so nothing ever bunches up at one end.
     auto knobRow = area.removeFromBottom (118).reduced (20, 12);
 
-    LabelledKnob* knobs[] { &rangeKnob, &curveKnob, &snapKnob, &mixKnob };
-    constexpr int numKnobs = 4;
+    LabelledKnob* knobs[] { &rangeKnob, &fineKnob, &curveKnob, &snapKnob, &mixKnob };
+    constexpr int numKnobs = 5;
 
     const int columnWidth = knobRow.getWidth() / numKnobs;
     const int knobWidth   = juce::jmin (110, columnWidth - 24);

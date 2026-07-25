@@ -405,10 +405,20 @@ static int countRPNSequences (const std::vector<RawMidiEvent>& events)
                                             }));
 }
 
+/** The handshake is opt-in, so the tests that exercise it have to ask. */
+static EmitterSettings settingsWithRPN (double range = 12.0)
+{
+    EmitterSettings settings;
+    settings.sendRangeRPN       = true;
+    settings.bendRangeSemitones = range;
+    return settings;
+}
+
 TEST (range_is_announced_when_playback_starts)
 {
     BendEmitter emitter;
     emitter.prepare (48000.0);
+    emitter.setSettings (settingsWithRPN());
 
     const auto events = emitter.processBlock (makeRisingCurve(), { true, 0.0, 120.0 }, 512);
     CHECK_EQ (countRPNSequences (events), 1);
@@ -419,6 +429,7 @@ TEST (range_is_not_re_announced_every_single_block)
     // Spamming RPN on every block floods the MIDI stream and upsets some synths.
     BendEmitter emitter;
     emitter.prepare (48000.0);
+    emitter.setSettings (settingsWithRPN());
 
     emitter.processBlock (makeRisingCurve(), { true, 0.0, 120.0 }, 512);
     const auto second = emitter.processBlock (makeRisingCurve(), { true, 0.25, 120.0 }, 512);
@@ -430,11 +441,10 @@ TEST (range_is_re_announced_after_the_user_changes_it)
 {
     BendEmitter emitter;
     emitter.prepare (48000.0);
+    emitter.setSettings (settingsWithRPN());
     emitter.processBlock (makeRisingCurve(), { true, 0.0, 120.0 }, 512);
 
-    EmitterSettings settings;
-    settings.bendRangeSemitones = 24.0;
-    emitter.setSettings (settings);
+    emitter.setSettings (settingsWithRPN (24.0));
 
     const auto events = emitter.processBlock (makeRisingCurve(), { true, 0.25, 120.0 }, 512);
     CHECK_EQ (countRPNSequences (events), 1);
@@ -632,6 +642,193 @@ TEST (tempo_changes_are_followed)
     };
 
     CHECK (lastValue (fastEvents) > lastValue (slowEvents));
+}
+
+// =============================================================================
+// Being completely invisible when not in use
+//
+// A plugin sitting in the chain doing nothing must not change the sound. The
+// range handshake in particular rides on CC 6 and CC 38, which synths that do
+// not implement RPN will apply to whatever those are mapped to — silently
+// altering the patch.
+// =============================================================================
+
+TEST (a_disabled_emitter_sends_absolutely_nothing)
+{
+    BendEmitter emitter;
+    emitter.prepare (48000.0);
+
+    EmitterSettings settings;
+    settings.enabled      = false;
+    settings.sendRangeRPN = true; // even asked for, it must stay silent
+    emitter.setSettings (settings);
+
+    for (int i = 0; i < 8; ++i)
+    {
+        const auto events = emitter.processBlock (makeRisingCurve(),
+                                                  { true, i * 0.5, 120.0 }, 4096);
+        CHECK (events.empty());
+    }
+}
+
+TEST (the_range_handshake_is_off_unless_asked_for)
+{
+    // The default must be silent, because the failure mode is a changed patch
+    // rather than an error message.
+    BendEmitter emitter;
+    emitter.prepare (48000.0);
+
+    CHECK (! emitter.getSettings().sendRangeRPN);
+
+    const auto events = emitter.processBlock (makeRisingCurve(), { true, 0.0, 120.0 }, 512);
+    CHECK_EQ (countRPNSequences (events), 0);
+}
+
+TEST (switching_off_mid_bend_un_bends_the_synth_exactly_once)
+{
+    BendEmitter emitter;
+    emitter.prepare (48000.0);
+    emitter.processBlock (makeRisingCurve(), { true, 2.0, 120.0 }, 512);
+
+    EmitterSettings settings;
+    settings.enabled = false;
+    emitter.setSettings (settings);
+
+    const auto onDisable = emitter.processBlock (makeRisingCurve(), { true, 2.1, 120.0 }, 512);
+    CHECK (containsCentredBend (onDisable));
+
+    // ...and then nothing further, ever.
+    const auto afterwards = emitter.processBlock (makeRisingCurve(), { true, 2.2, 120.0 }, 512);
+    CHECK (afterwards.empty());
+}
+
+TEST (an_emitter_that_never_ran_stays_silent_when_disabled)
+{
+    // Nothing was bent, so there is nothing to undo, so not one byte goes out.
+    BendEmitter emitter;
+    emitter.prepare (48000.0);
+
+    EmitterSettings settings;
+    settings.enabled = false;
+    emitter.setSettings (settings);
+
+    CHECK (emitter.processBlock (makeRisingCurve(), { true, 0.0, 120.0 }, 512).empty());
+}
+
+TEST (re_enabling_starts_cleanly)
+{
+    BendEmitter emitter;
+    emitter.prepare (48000.0);
+
+    EmitterSettings off;
+    off.enabled = false;
+    emitter.setSettings (off);
+    emitter.processBlock (makeRisingCurve(), { true, 0.0, 120.0 }, 512);
+
+    EmitterSettings on;
+    on.enabled      = true;
+    on.sendRangeRPN = true;
+    emitter.setSettings (on);
+
+    const auto events = emitter.processBlock (makeRisingCurve(), { true, 2.0, 120.0 }, 512);
+
+    CHECK_EQ (countRPNSequences (events), 1);
+    CHECK (containsPitchBend (events));
+}
+
+// =============================================================================
+// Fine tuning
+// =============================================================================
+
+static double semitonesOfLastBend (const std::vector<RawMidiEvent>& events, double range)
+{
+    int value = pitchBendCentre;
+
+    for (const auto& e : events)
+        if ((e.status & 0xF0) == 0xE0)
+            value = (static_cast<int> (e.data2) << 7) | static_cast<int> (e.data1);
+
+    return pitchBendToSemitones (value, range);
+}
+
+TEST (fine_tune_shifts_full_bend_by_the_stated_cents)
+{
+    BendCurve curve;
+    curve.addNode ({ 0.0, -11.0, 0.0 }); // just inside the range, so nothing clamps
+
+    BendEmitter emitter;
+    emitter.prepare (48000.0);
+
+    EmitterSettings settings;
+    settings.bendRangeSemitones = 12.0;
+    settings.fineTuneCents      = 0.0;
+    emitter.setSettings (settings);
+
+    const double plain = semitonesOfLastBend (
+        emitter.processBlock (curve, { true, 0.0, 120.0 }, 512), 12.0);
+
+    CHECK_NEAR (plain, -11.0, 0.01);
+
+    // 50 cents of trim, measured at full bend, is 11/12 of that at 11 semitones.
+    BendEmitter trimmed;
+    trimmed.prepare (48000.0);
+
+    settings.fineTuneCents = 50.0;
+    trimmed.setSettings (settings);
+
+    const double corrected = semitonesOfLastBend (
+        trimmed.processBlock (curve, { true, 0.0, 120.0 }, 512), 12.0);
+
+    CHECK_NEAR (corrected, -11.0 - (11.0 / 12.0) * 0.5, 0.01);
+}
+
+TEST (fine_tune_is_proportional_so_nulling_it_once_nulls_it_everywhere)
+{
+    // A range mismatch is a scale error, not an offset. If this were applied as
+    // a fixed offset, correcting it at full bend would break the middle.
+    BendEmitter emitter;
+    emitter.prepare (48000.0);
+
+    EmitterSettings settings;
+    settings.bendRangeSemitones = 12.0;
+    settings.fineTuneCents      = 100.0; // one semitone at full bend
+    emitter.setSettings (settings);
+
+    for (double drawn : { -12.0, -6.0, -3.0, 3.0, 6.0, 12.0 })
+    {
+        BendCurve curve;
+        curve.addNode ({ 0.0, drawn * 0.9, 0.0 }); // scaled in to avoid clamping
+
+        BendEmitter fresh;
+        fresh.prepare (48000.0);
+        fresh.setSettings (settings);
+
+        const double expected = drawn * 0.9 * (1.0 + 1.0 / 12.0);
+        const double actual   = semitonesOfLastBend (
+            fresh.processBlock (curve, { true, 0.0, 120.0 }, 512), 12.0);
+
+        CHECK_NEAR (actual, expected, 0.02);
+    }
+}
+
+TEST (fine_tune_leaves_the_centre_alone)
+{
+    // Whatever the trim, an unbent note must stay exactly where it was.
+    BendCurve curve;
+    curve.addNode ({ 0.0, 0.0, 0.0 });
+
+    for (double cents : { -100.0, -25.0, 0.0, 25.0, 100.0 })
+    {
+        BendEmitter emitter;
+        emitter.prepare (48000.0);
+
+        EmitterSettings settings;
+        settings.fineTuneCents = cents;
+        emitter.setSettings (settings);
+
+        const auto events = emitter.processBlock (curve, { true, 0.0, 120.0 }, 512);
+        CHECK_NEAR (semitonesOfLastBend (events, 12.0), 0.0, 0.001);
+    }
 }
 
 TEST (safety_reset_always_centres)
