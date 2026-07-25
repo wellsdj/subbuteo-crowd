@@ -72,6 +72,12 @@ void SnapBendProcessor::setCurve (const snapbend::BendCurve& newCurve)
     curve = newCurve;
 }
 
+void SnapBendProcessor::setZoom (double horizontal, double vertical) noexcept
+{
+    horizontalZoom.store (juce::jlimit (0.0, 1.0, horizontal));
+    verticalZoom.store (juce::jlimit (0.0, 1.0, vertical));
+}
+
 void SnapBendProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                                       juce::MidiBuffer&        midiMessages)
 {
@@ -151,6 +157,8 @@ void SnapBendProcessor::getStateInformation (juce::MemoryBlock& destData)
     // The curve rides along inside the parameter tree, so it is saved with the
     // Logic project and restored with it.
     state.setProperty ("curve", juce::String (getCurve().toString()), nullptr);
+    state.setProperty ("zoomH", horizontalZoom.load(), nullptr);
+    state.setProperty ("zoomV", verticalZoom.load(), nullptr);
 
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
@@ -171,6 +179,9 @@ void SnapBendProcessor::setStateInformation (const void* data, int sizeInBytes)
 
         if (const auto restored = snapbend::BendCurve::fromString (text))
             setCurve (*restored);
+
+        if (state.hasProperty ("zoomH") && state.hasProperty ("zoomV"))
+            setZoom (state.getProperty ("zoomH"), state.getProperty ("zoomV"));
     }
 }
 

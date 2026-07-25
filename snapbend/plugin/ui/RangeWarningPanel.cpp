@@ -43,7 +43,7 @@ void RangeWarningPanel::setRequirement (double neededSemitones, double range)
     body = "This curve goes " + neededText + " semitones from the note, but the "
            "synth is only allowed " + rangeText + ".\n\n"
            "SnapBend has already asked it for " + neededText + " automatically. "
-           "Plenty of synths ignore that request — so if the bend still sounds "
+           "Plenty of synths ignore that request, so if the bend still sounds "
            "too small, open your synthesiser and find its pitch bend range "
            "(it may be called Bend Range, Pitch Bend Up / Down, or Pitch Bend "
            "Sensitivity) and set it to " + neededText + " semitones or more.";

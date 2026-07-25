@@ -76,6 +76,33 @@ void SnapBendLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int
     g.fillPath (pointer);
 }
 
+void SnapBendLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int width, int height,
+                                            float sliderPos, float, float,
+                                            juce::Slider::SliderStyle, juce::Slider& slider)
+{
+    // Deliberately modelled on the zoom sliders in Logic's own editors: a thin
+    // recessed track with a plain round grip.
+    const auto bounds = juce::Rectangle<int> (x, y, width, height).toFloat();
+
+    const float trackHeight = 4.0f;
+    const auto  track = juce::Rectangle<float> (bounds.getX(), bounds.getCentreY() - trackHeight * 0.5f,
+                                                bounds.getWidth(), trackHeight);
+
+    g.setColour (colours::gridLine);
+    g.fillRoundedRectangle (track, trackHeight * 0.5f);
+
+    const float thumbSize = juce::jmin (14.0f, bounds.getHeight());
+    const float thumbX = juce::jlimit (bounds.getX(),
+                                       bounds.getRight() - thumbSize,
+                                       sliderPos - thumbSize * 0.5f);
+
+    const auto thumb = juce::Rectangle<float> (thumbX, bounds.getCentreY() - thumbSize * 0.5f,
+                                               thumbSize, thumbSize);
+
+    g.setColour (slider.isMouseOverOrDragging() ? colours::text : colours::textDim.brighter (0.3f));
+    g.fillEllipse (thumb);
+}
+
 void SnapBendLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Button& button,
                                                 const juce::Colour& backgroundColour,
                                                 bool shouldDrawButtonAsHighlighted,

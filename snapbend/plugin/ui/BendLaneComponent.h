@@ -32,6 +32,14 @@ public:
 
     void setPlayheadPosition (double beat, bool isPlaying);
 
+    /** Zoom, 0 = fully out, 1 = fully in, 0.5 = the default view.
+        Horizontal sets how much of the timeline is on screen, vertical how
+        many semitones. */
+    void setZoom (double horizontal, double vertical);
+
+    /** Removes every point. */
+    void clearCurve();
+
     /** Called whenever the user edits the curve. */
     std::function<void (const snapbend::BendCurve&)> onCurveChanged;
 
@@ -44,6 +52,7 @@ public:
     void mouseMove (const juce::MouseEvent&) override;
     void mouseDoubleClick (const juce::MouseEvent&) override;
     void mouseExit (const juce::MouseEvent&) override;
+    void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
 
 private:
     // ---- coordinate mapping --------------------------------------------
@@ -91,9 +100,20 @@ private:
     bool   transportRunning = false;
 
     double viewStartBeat = 0.0;
-    double visibleBeats  = 16.0;
     double beatGrid      = 0.25;   ///< sixteenth notes
     int    beatsPerBar   = 4;
+
+    /** Zoom, 0..1. Both default to the middle, which gives four bars across
+        and a little past the bend range vertically. */
+    double horizontalZoom = 0.5;
+    double verticalZoom   = 0.5;
+
+    /** How much of the timeline is on screen, derived from horizontalZoom. */
+    double getVisibleBeats() const;
+
+    /** Chooses a beat interval whose gridlines will not end up on top of each
+        other at the current zoom. */
+    double getBeatGridStep (juce::Rectangle<float> lane) const;
 
     enum class DragMode { none, node, shape };
 
@@ -104,8 +124,11 @@ private:
     double   dragStartShape = 0.0;
     float    dragStartY     = 0.0f;
 
-    static constexpr float nodeRadius   = 5.0f;
-    static constexpr float nodeHitRadius = 10.0f;
+    static constexpr float nodeRadius = 5.0f;
+
+    /** Generous on purpose: a near-miss used to drop a new point on top of the
+        one you were aiming at. */
+    static constexpr float nodeHitRadius = 14.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BendLaneComponent)
 };

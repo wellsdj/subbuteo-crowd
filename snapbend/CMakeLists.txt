@@ -88,7 +88,8 @@ if(SNAPBEND_BUILD_PLUGIN)
         plugin/PluginEditor.cpp
         plugin/ui/BendLaneComponent.cpp
         plugin/ui/RangeWarningPanel.cpp
-        plugin/ui/SnapBendLookAndFeel.cpp)
+        plugin/ui/SnapBendLookAndFeel.cpp
+        plugin/ui/ZoomControls.cpp)
 
     target_compile_definitions(SnapBend PUBLIC
         JUCE_WEB_BROWSER=0

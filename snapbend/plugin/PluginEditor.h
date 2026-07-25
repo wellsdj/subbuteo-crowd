@@ -6,6 +6,7 @@
 #include "ui/BendLaneComponent.h"
 #include "ui/RangeWarningPanel.h"
 #include "ui/SnapBendLookAndFeel.h"
+#include "ui/ZoomControls.h"
 
 /** A rotary control with its name underneath and its value above.
 
@@ -58,6 +59,7 @@ private:
 
     BendLaneComponent bendLane;
     RangeWarningPanel rangeWarning;
+    ZoomControls      zoomControls;
 
     LabelledKnob rangeKnob { "RANGE", [] (double v) { return juce::String (juce::roundToInt (v)) + " st"; } };
     LabelledKnob curveKnob { "CURVE", [] (double v)
@@ -75,7 +77,11 @@ private:
     LabelledKnob mixKnob   { "MIX",   [] (double v) { return juce::String (juce::roundToInt (v * 100.0)) + "%"; } };
 
     juce::ToggleButton autoRangeButton { "Tell the synth its bend range automatically" };
-    juce::TextButton   panicButton     { "Reset bend" };
+
+    // Two separate jobs that were previously conflated under one "Reset bend"
+    // button: throwing away the drawn points, and un-bending a stuck synth.
+    juce::TextButton   clearButton     { "Clear points" };
+    juce::TextButton   panicButton     { "Reset pitch" };
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;

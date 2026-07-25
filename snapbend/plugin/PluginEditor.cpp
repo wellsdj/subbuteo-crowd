@@ -80,7 +80,9 @@ SnapBendEditor::SnapBendEditor (SnapBendProcessor& p)
     addAndMakeVisible (snapKnob);
     addAndMakeVisible (mixKnob);
     addAndMakeVisible (autoRangeButton);
+    addAndMakeVisible (clearButton);
     addAndMakeVisible (panicButton);
+    addAndMakeVisible (zoomControls);
 
     addChildComponent (rangeWarning); // hidden until it is needed
 
@@ -116,8 +118,24 @@ SnapBendEditor::SnapBendEditor (SnapBendProcessor& p)
         rangeWarning.setVisible (false);
     };
 
+    clearButton.onClick = [this] { bendLane.clearCurve(); };
+    clearButton.setTooltip ("Remove every point and start the curve again.");
+
     panicButton.onClick = [this] { processor.requestSafetyReset(); };
-    panicButton.setTooltip ("Send the synth back to normal pitch, if anything is left bent.");
+    panicButton.setTooltip ("Send the synth back to normal pitch, if a bend is ever left hanging.");
+
+    zoomControls.setZoom (processor.getHorizontalZoom(), processor.getVerticalZoom());
+
+    zoomControls.onZoomChanged = [this]
+    {
+        const double horizontal = zoomControls.getHorizontalZoom();
+        const double vertical   = zoomControls.getVerticalZoom();
+
+        bendLane.setZoom (horizontal, vertical);
+        processor.setZoom (horizontal, vertical);
+    };
+
+    bendLane.setZoom (processor.getHorizontalZoom(), processor.getVerticalZoom());
 
     rangeAttachment = std::make_unique<SliderAttachment> (processor.apvts, "range", rangeKnob.getSlider());
     curveAttachment = std::make_unique<SliderAttachment> (processor.apvts, "curve", curveKnob.getSlider());
@@ -219,8 +237,8 @@ void SnapBendEditor::resized()
     auto header = area.removeFromTop (54).reduced (20, 12);
 
     panicButton.setBounds (header.removeFromRight (104));
-    header.removeFromRight (16);
-    autoRangeButton.setBounds (header.removeFromRight (300));
+    header.removeFromRight (10);
+    clearButton.setBounds (header.removeFromRight (104));
 
     // ---- knob row -------------------------------------------------------
     //
@@ -242,8 +260,18 @@ void SnapBendEditor::resized()
         knobs[i]->setBounds (column.withSizeKeepingCentre (knobWidth, column.getHeight()));
     }
 
+    // ---- the strip beneath the lane -------------------------------------
+    //
+    // The synth-range toggle on the left, zoom on the right. Keeping both out
+    // of the header stops the top of the window turning into a toolbar.
+    auto strip = area.removeFromBottom (30).reduced (20, 4);
+
+    zoomControls.setBounds (strip.removeFromRight (240));
+    strip.removeFromRight (20);
+    autoRangeButton.setBounds (strip);
+
     // ---- the lane -------------------------------------------------------
-    bendLane.setBounds (area.reduced (20, 10));
+    bendLane.setBounds (area.reduced (20, 10).withTrimmedBottom (2));
 
     // ---- the warning ----------------------------------------------------
     const int warningWidth  = juce::jmin (460, bendLane.getWidth() - 40);

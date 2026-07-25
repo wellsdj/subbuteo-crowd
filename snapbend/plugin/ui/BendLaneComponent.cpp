@@ -23,7 +23,14 @@ namespace
     bool isLabelledInterval (int semitone)
     {
         const int s = std::abs (semitone);
-        return s == 0 || s == 2 || s == 5 || s == 7 || s == 12 || s == 19 || s == 24;
+        return s == 0 || s == 2 || s == 5 || s == 7 || s == 12
+            || s == 19 || s == 24 || s == 36 || s == 48;
+    }
+
+    /** Octaves only — all that fits once the view is zoomed right out. */
+    bool isOctave (int semitone)
+    {
+        return std::abs (semitone) % 12 == 0;
     }
 }
 
@@ -69,12 +76,55 @@ void BendLaneComponent::setPlayheadPosition (double beat, bool isPlaying)
     playheadBeat     = beat;
     transportRunning = isPlaying;
 
+    const double span = getVisibleBeats();
+
     // Follow the playhead when it leaves the window, so a long bend does not
     // require chasing it by hand.
-    if (isPlaying && (beat < viewStartBeat || beat > viewStartBeat + visibleBeats))
-        viewStartBeat = std::floor (beat / visibleBeats) * visibleBeats;
+    if (isPlaying && (beat < viewStartBeat || beat > viewStartBeat + span))
+        viewStartBeat = std::floor (beat / span) * span;
 
     repaint();
+}
+
+void BendLaneComponent::setZoom (double horizontal, double vertical)
+{
+    const double newHorizontal = juce::jlimit (0.0, 1.0, horizontal);
+    const double newVertical   = juce::jlimit (0.0, 1.0, vertical);
+
+    if (std::abs (newHorizontal - horizontalZoom) < 1.0e-9
+        && std::abs (newVertical - verticalZoom) < 1.0e-9)
+        return;
+
+    // Zoom around the middle of what is currently on screen, so the thing you
+    // were looking at stays roughly where it was instead of flying off.
+    const double centreBeat = viewStartBeat + getVisibleBeats() * 0.5;
+
+    horizontalZoom = newHorizontal;
+    verticalZoom   = newVertical;
+
+    viewStartBeat = juce::jmax (0.0, centreBeat - getVisibleBeats() * 0.5);
+
+    repaint();
+}
+
+void BendLaneComponent::clearCurve()
+{
+    if (curve.isEmpty())
+        return;
+
+    curve.clear();
+    hoverNode    = -1;
+    hoverSegment = -1;
+
+    notifyCurveChanged();
+    repaint();
+}
+
+double BendLaneComponent::getVisibleBeats() const
+{
+    // Two beats when fully in, 128 when fully out, with the default 0.5 landing
+    // on exactly 16 — four bars, which is the view the plugin opens with.
+    return 2.0 * std::pow (64.0, 1.0 - horizontalZoom);
 }
 
 // ---------------------------------------------------------------------------
@@ -94,13 +144,19 @@ double BendLaneComponent::getDisplayRange() const
     // beyond what the synth can reach — that shaded band is what teaches the
     // limit. Only a little, though: shading half the grid makes the whole lane
     // look dirty and buries the curve.
-    return juce::jlimit (3.0, 48.0, bendRange * 1.35);
+    //
+    // The zoom slider then scales that: a third of it when fully in, three
+    // times when fully out, which at the widest reaches the ±48 semitone
+    // ceiling that MIDI itself imposes.
+    const double zoomFactor = std::pow (3.0, 1.0 - 2.0 * verticalZoom);
+
+    return juce::jlimit (2.0, 48.0, bendRange * 1.35 * zoomFactor);
 }
 
 float BendLaneComponent::beatToX (double beat) const
 {
     const auto lane = getLaneBounds();
-    const double proportion = (beat - viewStartBeat) / visibleBeats;
+    const double proportion = (beat - viewStartBeat) / getVisibleBeats();
 
     return lane.getX() + static_cast<float> (proportion) * lane.getWidth();
 }
@@ -112,7 +168,7 @@ double BendLaneComponent::xToBeat (float x) const
     if (lane.getWidth() <= 0.0f)
         return viewStartBeat;
 
-    return viewStartBeat + ((x - lane.getX()) / lane.getWidth()) * visibleBeats;
+    return viewStartBeat + ((x - lane.getX()) / lane.getWidth()) * getVisibleBeats();
 }
 
 float BendLaneComponent::semitoneToY (double semitones) const
@@ -213,6 +269,24 @@ void BendLaneComponent::mouseDown (const juce::MouseEvent& event)
     const bool snapDisabled = event.mods.isAltDown();
 
     const int node = findNodeAt (position);
+
+    // Right-click (or ctrl-click) removes a point. Double-clicking works too,
+    // but it is fiddly on a trackpad and easy to miss — and a miss used to add
+    // a point instead of removing one, which is the opposite of what you asked
+    // for. Right-click never adds anything.
+    if (event.mods.isPopupMenu())
+    {
+        if (node >= 0)
+        {
+            curve.removeNode (static_cast<size_t> (node));
+            hoverNode = -1;
+
+            notifyCurveChanged();
+            repaint();
+        }
+
+        return;
+    }
 
     if (node >= 0)
     {
@@ -326,6 +400,21 @@ void BendLaneComponent::mouseDoubleClick (const juce::MouseEvent& event)
     }
 }
 
+void BendLaneComponent::mouseWheelMove (const juce::MouseEvent&,
+                                        const juce::MouseWheelDetails& wheel)
+{
+    // Scroll along the timeline. Trackpads report horizontal movement directly;
+    // a plain wheel only has the vertical axis, so use whichever moved.
+    const float amount = std::abs (wheel.deltaX) > std::abs (wheel.deltaY) ? wheel.deltaX
+                                                                          : wheel.deltaY;
+
+    if (std::abs (amount) < 1.0e-6f)
+        return;
+
+    viewStartBeat = juce::jmax (0.0, viewStartBeat - amount * getVisibleBeats() * 0.5);
+    repaint();
+}
+
 void BendLaneComponent::mouseExit (const juce::MouseEvent&)
 {
     if (hoverNode >= 0 || hoverSegment >= 0)
@@ -395,10 +484,19 @@ void BendLaneComponent::drawSemitoneGrid (juce::Graphics& g, juce::Rectangle<flo
 {
     const int limit = static_cast<int> (std::floor (getDisplayRange()));
 
-    // When the whole range is small every line can be numbered without
-    // crowding; once it grows, fall back to the sparse landmark set.
+    // Line and label density both have to follow the zoom. Zoomed in, every
+    // semitone can be drawn and numbered; zoomed right out, 97 lines across a
+    // few hundred pixels would be a grey hatch rather than a grid.
     const float pixelsPerSemitone = lane.getHeight() / static_cast<float> (2 * limit + 1);
-    const bool  labelEverySemitone = pixelsPerSemitone >= 16.0f;
+
+    const bool drawEveryLine = pixelsPerSemitone >= 5.0f;
+
+    const auto shouldLabel = [&] (int semitone)
+    {
+        if (pixelsPerSemitone >= 16.0f) return true;
+        if (pixelsPerSemitone >= 7.0f)  return isLabelledInterval (semitone);
+        return isOctave (semitone);
+    };
 
     for (int semitone = -limit; semitone <= limit; ++semitone)
     {
@@ -410,13 +508,16 @@ void BendLaneComponent::drawSemitoneGrid (juce::Graphics& g, juce::Rectangle<flo
         const bool landmark = isLandmarkInterval (semitone);
         const bool centre   = semitone == 0;
 
-        g.setColour (centre   ? colours::gridLineBold.brighter (0.25f)
-                   : landmark ? colours::gridLineBold
-                              : colours::gridLine);
+        if (drawEveryLine || isOctave (semitone))
+        {
+            g.setColour (centre   ? colours::gridLineBold.brighter (0.25f)
+                       : landmark ? colours::gridLineBold
+                                  : colours::gridLine);
 
-        g.fillRect (lane.getX(), y, lane.getWidth(), centre ? 1.4f : 1.0f);
+            g.fillRect (lane.getX(), y, lane.getWidth(), centre ? 1.4f : 1.0f);
+        }
 
-        if (labelEverySemitone || isLabelledInterval (semitone))
+        if (shouldLabel (semitone))
         {
             g.setColour (centre ? colours::text : colours::textDim);
             g.setFont (juce::Font (juce::FontOptions (centre ? 11.5f : 10.5f,
@@ -432,11 +533,26 @@ void BendLaneComponent::drawSemitoneGrid (juce::Graphics& g, juce::Rectangle<flo
     }
 }
 
+double BendLaneComponent::getBeatGridStep (juce::Rectangle<float> lane) const
+{
+    const double pixelsPerBeat = lane.getWidth() / getVisibleBeats();
+
+    // Zoomed right out, a line per beat would be a solid wall; zoomed right in,
+    // sixteenths are useful. Pick the finest interval still worth drawing.
+    for (double step : { 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0 })
+        if (pixelsPerBeat * step >= 14.0)
+            return step;
+
+    return 64.0;
+}
+
 void BendLaneComponent::drawBeatGrid (juce::Graphics& g, juce::Rectangle<float> lane) const
 {
-    const double firstBeat = std::floor (viewStartBeat);
+    const double step      = getBeatGridStep (lane);
+    const double firstBeat = std::floor (viewStartBeat / step) * step;
+    const double lastBeat  = viewStartBeat + getVisibleBeats();
 
-    for (double beat = firstBeat; beat <= viewStartBeat + visibleBeats; beat += 1.0)
+    for (double beat = firstBeat; beat <= lastBeat; beat += step)
     {
         const float x = beatToX (beat);
 
@@ -565,8 +681,12 @@ void BendLaneComponent::drawEmptyHint (juce::Graphics& g, juce::Rectangle<float>
     g.setColour (colours::textDim.withAlpha (0.5f));
     g.setFont (juce::Font (juce::FontOptions (11.5f)));
 
-    g.drawText ("Drag a point to move it  ·  drag the line between two points to curve it  "
-                "·  double-click a point to remove it  ·  hold Alt to ignore the grid",
+    // CharPointer_UTF8 is required for anything above plain ASCII: JUCE's
+    // String(const char*) decodes as Latin-1, which turns the separator dots
+    // into "Â·".
+    g.drawText (juce::CharPointer_UTF8 (
+                    "Drag a point to move it  ·  drag the line between two points to curve it  "
+                    "·  right-click a point to remove it  ·  hold Alt to ignore the grid"),
                 lane.withHeight (20.0f).withY (lane.getCentreY() + 4.0f),
                 juce::Justification::centred, false);
 }

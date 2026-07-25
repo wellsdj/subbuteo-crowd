@@ -57,7 +57,9 @@ The other classic failures are handled too:
 **Tell the synth its bend range automatically** — leave this on unless you have
 a synth that mishandles RPN and you would rather set its range by hand.
 
-**Reset bend** — sends the synth back to normal pitch, if anything is ever left
+**Clear points** — throws away the whole curve and starts again.
+
+**Reset pitch** — sends the synth back to normal pitch, if a bend is ever left
 hanging.
 
 ### Editing
@@ -65,8 +67,22 @@ hanging.
 - **Click** empty space to add a point
 - **Drag** a point to move it (snapping to semitones and to the beat grid)
 - **Drag the line** between two points to curve the slide
-- **Double-click** a point to remove it
+- **Right-click** a point to remove it (double-click works too)
 - **Hold Alt** while dragging to ignore the grid entirely
+
+### Zoom
+
+The two sliders at the bottom right work like the zoom controls in Logic's own
+editors — vertical arrows for how many semitones are on screen, horizontal for
+how much of the timeline.
+
+Fully out is ±48 semitones and 128 beats; fully in is a couple of semitones and
+two beats. **Double-click either slider** to return it to the default view.
+Scrolling over the lane moves along the timeline, and the zoom setting is saved
+with the project.
+
+±48 really is as far out as it goes — that is the widest bend MIDI itself can
+express.
 
 ## Building it
 

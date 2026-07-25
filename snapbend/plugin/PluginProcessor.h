@@ -53,6 +53,12 @@ public:
     snapbend::BendCurve getCurve() const;
     void setCurve (const snapbend::BendCurve& newCurve);
 
+    /** Zoom is view state rather than something you would automate, so it is
+        kept here and saved with the project, but is not a parameter. */
+    void setZoom (double horizontal, double vertical) noexcept;
+    double getHorizontalZoom() const noexcept { return horizontalZoom.load(); }
+    double getVerticalZoom()   const noexcept { return verticalZoom.load(); }
+
     /** Where the host's playhead is, for drawing the position line. */
     double getCurrentBeat() const noexcept { return currentBeat.load(); }
     bool   isPlaying()      const noexcept { return transportRunning.load(); }
@@ -70,6 +76,9 @@ private:
 
     mutable juce::CriticalSection curveLock;
     snapbend::BendCurve           curve;
+
+    std::atomic<double> horizontalZoom     { 0.5 };
+    std::atomic<double> verticalZoom       { 0.5 };
 
     std::atomic<double> currentBeat        { 0.0 };
     std::atomic<bool>   transportRunning   { false };
