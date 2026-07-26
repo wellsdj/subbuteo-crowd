@@ -44,6 +44,9 @@ public:
     /** Removes every point. */
     void clearCurve();
 
+    /** Shows the calibration instructions over the lane while the tone runs. */
+    void setCalibrating (bool shouldShow);
+
     /** Called whenever the user edits the curve. */
     std::function<void (const snapbend::BendCurve&)> onCurveChanged;
 
@@ -109,6 +112,7 @@ private:
     double shapeBias     = 0.0;
     double playheadBeat  = 0.0;
     bool   transportRunning = false;
+    bool   calibrating      = false;
 
     double viewStartBeat = 0.0;
     double beatGrid      = 0.25;   ///< sixteenth notes

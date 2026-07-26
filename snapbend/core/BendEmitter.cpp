@@ -44,6 +44,106 @@ void BendEmitter::setSettings (const EmitterSettings& newSettings)
     }
 }
 
+std::vector<RawMidiEvent> BendEmitter::stopCalibration()
+{
+    std::vector<RawMidiEvent> events;
+
+    if (calibrationNote >= 0)
+    {
+        events.push_back (makeNoteOff (calibrationNote, settings.channel, 0));
+        calibrationNote = -1;
+    }
+
+    events.push_back (makeCentredBend (settings.channel, 0));
+
+    calibrationCounter = 0;
+    lastSentBend       = pitchBendCentre;
+
+    return events;
+}
+
+std::vector<RawMidiEvent> BendEmitter::processCalibrationBlock (int numSamples)
+{
+    std::vector<RawMidiEvent> events;
+
+    if (numSamples <= 0)
+        return events;
+
+    const int phaseLength = std::max (1, static_cast<int> (sampleRate)); // one second
+
+    // The reference note is a whole number of semitones above the root, so it
+    // is a pitch the synth can produce with no bend at all — the thing we are
+    // measuring against.
+    const int rootNote      = 60;
+    const int semitonesUp   = std::max (1, static_cast<int> (std::lround (settings.bendRangeSemitones)));
+    const int referenceNote = std::min (127, rootNote + semitonesUp);
+
+    int remaining = numSamples;
+    int offset    = 0;
+
+    while (remaining > 0)
+    {
+        const int positionInPhase = static_cast<int> (calibrationCounter % phaseLength);
+
+        if (positionInPhase == 0)
+        {
+            if (calibrationNote >= 0)
+                events.push_back (makeNoteOff (calibrationNote, settings.channel, offset));
+
+            const bool bentPhase = ((calibrationCounter / phaseLength) % 2) != 0;
+
+            if (bentPhase)
+            {
+                // The root note, bent up by the full range. If the range is
+                // right this is exactly the reference pitch.
+                events.push_back (makeBend (semitonesToPitchBend (settings.bendRangeSemitones,
+                                                                  getEffectiveRange()),
+                                            settings.channel, offset));
+                calibrationNote = rootNote;
+            }
+            else
+            {
+                events.push_back (makeCentredBend (settings.channel, offset));
+                calibrationNote = referenceNote;
+            }
+
+            events.push_back (makeNoteOn (calibrationNote, 100, settings.channel, offset));
+        }
+
+        const int chunk = std::min (remaining, phaseLength - positionInPhase);
+
+        calibrationCounter += chunk;
+        offset             += chunk;
+        remaining          -= chunk;
+    }
+
+    // Calibration owns the bend while it runs, so normal playback has to
+    // re-assert everything when it takes over again.
+    lastSentBend = -1;
+    rangeSent    = false;
+
+    return events;
+}
+
+double BendEmitter::getEffectiveRange() const noexcept
+{
+    // The trim belongs on the range we *encode against*, not on the value being
+    // encoded.
+    //
+    // Scaling the value instead looks equivalent — and is, in the middle — but
+    // it breaks at exactly the point where the error is largest. Ask for the
+    // full range plus a correction and the result falls outside the range, so
+    // it clamps to the rail and the correction is thrown away. The trim then
+    // does nothing at full bend, which is the one place anyone tests it.
+    //
+    // Adjusting the assumed range instead means FINE is simply "the synth's
+    // real range is this many cents wider than it claims", the encoded value
+    // stays comfortably inside the rails, and the correction holds everywhere.
+    return std::clamp (settings.bendRangeSemitones + settings.fineTuneCents / 100.0,
+                       minBendRangeSemitones,
+                       maxBendRangeSemitones);
+}
+
 std::vector<RawMidiEvent> BendEmitter::makeSafetyReset()
 {
     lastSentBend = pitchBendCentre;
@@ -124,23 +224,15 @@ std::vector<RawMidiEvent> BendEmitter::processBlock (const BendCurve&     curve,
     const double quartersPerSec = bpm / 60.0;
     const double intervalSamples = std::max (1.0, settings.updateIntervalMs * 0.001 * sampleRate);
 
-    // Always evaluate the final sample of the block as well as the grid points,
-    // so a bend that lands exactly on a block boundary is not left a step short.
-    // A synth whose real bend range differs from the one it reports is wrong by
-    // an amount proportional to the bend — inaudible near the centre, worst at
-    // the extremes. So the trim scales the curve rather than offsetting it, and
-    // nulling it at full bend nulls it at every depth.
-    const double fineScale = 1.0 + settings.fineTuneCents
-                                     / (100.0 * settings.bendRangeSemitones);
+    const double effectiveRange = getEffectiveRange();
 
     for (double pos = 0.0; pos < static_cast<double> (numSamples); pos += intervalSamples)
     {
         const int offset = static_cast<int> (pos);
 
         const double beat  = transport.ppqPosition + (pos / sampleRate) * quartersPerSec;
-        const double value = curve.valueAtBeat (beat, settings.shapeBias)
-                                 * settings.depth * fineScale;
-        const int    bend  = semitonesToPitchBend (value, settings.bendRangeSemitones);
+        const double value = curve.valueAtBeat (beat, settings.shapeBias) * settings.depth;
+        const int    bend  = semitonesToPitchBend (value, effectiveRange);
 
         if (bend != lastSentBend)
         {

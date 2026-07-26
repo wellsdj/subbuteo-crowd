@@ -120,6 +120,15 @@ void BendLaneComponent::setZoom (double horizontal, double vertical)
     repaint();
 }
 
+void BendLaneComponent::setCalibrating (bool shouldShow)
+{
+    if (calibrating != shouldShow)
+    {
+        calibrating = shouldShow;
+        repaint();
+    }
+}
+
 void BendLaneComponent::clearCurve()
 {
     if (curve.isEmpty())
@@ -343,21 +352,30 @@ void BendLaneComponent::mouseDown (const juce::MouseEvent& event)
         return;
     }
 
-    const int segment = findSegmentAt (position);
-
-    if (segment >= 0)
+    // Holding command turns a drag on the line into a curve adjustment, the way
+    // dragging the middle of a Logic automation ramp does. Without the
+    // modifier, clicking the line adds a point — which is what you nearly
+    // always want, and what used to be impossible because the line swallowed
+    // the click and started shaping instead.
+    if (event.mods.isCommandDown())
     {
-        // Grabbing the line between two points bends it, exactly like dragging
-        // the middle of a Logic automation ramp.
-        dragMode       = DragMode::shape;
-        dragIndex      = segment;
-        dragStartShape = curve.getNodes()[static_cast<size_t> (segment)].shape;
-        dragStartY     = position.y;
-        setMouseCursor (juce::MouseCursor::UpDownResizeCursor);
-        return;
+        const int segment = findSegmentAt (position);
+
+        if (segment >= 0)
+        {
+            dragMode       = DragMode::shape;
+            dragIndex      = segment;
+            dragStartShape = curve.getNodes()[static_cast<size_t> (segment)].shape;
+            dragStartY     = position.y;
+            setMouseCursor (juce::MouseCursor::UpDownResizeCursor);
+            return;
+        }
     }
 
-    // Empty space: drop a new point here and start dragging it immediately.
+    // Anywhere else — including directly on the line — drops a new point and
+    // starts dragging it immediately. It lands on the nearest semitone, so a
+    // click that was never going to be pixel-accurate still gives an exact
+    // interval you can then nudge.
     // Beats are clamped at zero — there is no music before the start of the
     // project, and a point dragged off the left edge used to vanish there.
     const double beat      = juce::jmax (0.0, applySnapToBeat (xToBeat (position.x), snapDisabled));
@@ -423,7 +441,8 @@ void BendLaneComponent::mouseUp (const juce::MouseEvent&)
 void BendLaneComponent::mouseMove (const juce::MouseEvent& event)
 {
     const int node    = findNodeAt (event.position);
-    const int segment = node >= 0 ? -1 : findSegmentAt (event.position);
+    const int segment = (node >= 0 || ! event.mods.isCommandDown())
+                          ? -1 : findSegmentAt (event.position);
 
     if (node != hoverNode || segment != hoverSegment)
     {
@@ -510,6 +529,27 @@ void BendLaneComponent::paint (juce::Graphics& g)
     drawNodes (g);
     drawPlayhead (g, lane);
     drawRuler (g, getRulerBounds());
+
+    if (calibrating)
+    {
+        // Dim the grid: while the tone is running the lane is not what you
+        // should be looking at.
+        g.setColour (colours::background.withAlpha (0.82f));
+        g.fillRect (lane);
+
+        auto text = lane.withSizeKeepingCentre (lane.getWidth() - 60.0f, 70.0f);
+
+        g.setColour (colours::accent);
+        g.setFont (juce::Font (juce::FontOptions (15.0f, juce::Font::bold)));
+        g.drawText ("Calibrating", text.removeFromTop (22.0f),
+                    juce::Justification::centred, false);
+
+        g.setColour (colours::text);
+        g.setFont (juce::Font (juce::FontOptions (12.5f)));
+        g.drawFittedText ("Two notes are playing in turn. They should be the same pitch.\n"
+                          "If you hear the pitch jump between them, turn FINE until it stops.",
+                          text.toNearestInt(), juce::Justification::centredTop, 3);
+    }
 }
 
 void BendLaneComponent::drawOutOfRangeZones (juce::Graphics& g, juce::Rectangle<float> lane) const
@@ -798,8 +838,9 @@ void BendLaneComponent::drawEmptyHint (juce::Graphics& g, juce::Rectangle<float>
     // String(const char*) decodes as Latin-1, which turns the separator dots
     // into "Â·".
     g.drawText (juce::CharPointer_UTF8 (
-                    "Drag a point to move it  ·  drag the line between two points to curve it  "
-                    "·  right-click a point to remove it  ·  hold Alt to ignore the grid"),
+                    "Click the line to add a point  ·  drag a point to move it  "
+                    "·  right-click to remove it  ·  \xe2\x8c\x98-drag the line to curve it  "
+                    "·  hold Alt to ignore the grid"),
                 lane.withHeight (20.0f).withY (lane.getCentreY() + 4.0f),
                 juce::Justification::centred, false);
 }

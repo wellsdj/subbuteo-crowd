@@ -67,6 +67,9 @@ void SnapBendProcessor::prepareToPlay (double sampleRate, int)
 
 void SnapBendProcessor::releaseResources()
 {
+    calibrating.store (false);
+    wasCalibrating = false;
+
     // Leaving the instrument bent when the plugin goes away is the single most
     // annoying bug in this whole category, so make sure state is forgotten.
     emitter.reset();
@@ -162,9 +165,29 @@ void SnapBendProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         output.addEvent (message, metadata.samplePosition);
     }
 
-    auto events = safetyResetPending.exchange (false)
-                    ? emitter.makeSafetyReset()
-                    : emitter.processBlock (localCurve, transport, numSamples);
+    // ---- calibration takes over the channel while it runs ----------------
+    const bool nowCalibrating = calibrating.load();
+
+    std::vector<snapbend::RawMidiEvent> events;
+
+    if (nowCalibrating)
+    {
+        events = emitter.processCalibrationBlock (numSamples);
+        wasCalibrating = true;
+    }
+    else if (wasCalibrating)
+    {
+        // Silence the tone before handing the channel back, so calibration can
+        // never leave a note hanging.
+        events = emitter.stopCalibration();
+        wasCalibrating = false;
+    }
+    else
+    {
+        events = safetyResetPending.exchange (false)
+                   ? emitter.makeSafetyReset()
+                   : emitter.processBlock (localCurve, transport, numSamples);
+    }
 
     for (const auto& event : events)
         output.addEvent (juce::MidiMessage (event.status, event.data1, event.data2),

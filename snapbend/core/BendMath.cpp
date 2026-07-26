@@ -88,4 +88,20 @@ RawMidiEvent makeCentredBend (int channel, int sampleOffset) noexcept
     return makeBend (pitchBendCentre, channel, sampleOffset);
 }
 
+RawMidiEvent makeNoteOn (int note, int velocity, int channel, int sampleOffset) noexcept
+{
+    return { sampleOffset,
+             static_cast<uint8_t> (0x90 | clampChannel (channel)),
+             static_cast<uint8_t> (std::clamp (note, 0, 127)),
+             static_cast<uint8_t> (std::clamp (velocity, 1, 127)) };
+}
+
+RawMidiEvent makeNoteOff (int note, int channel, int sampleOffset) noexcept
+{
+    return { sampleOffset,
+             static_cast<uint8_t> (0x80 | clampChannel (channel)),
+             static_cast<uint8_t> (std::clamp (note, 0, 127)),
+             0 };
+}
+
 } // namespace snapbend

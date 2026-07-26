@@ -83,6 +83,7 @@ SnapBendEditor::SnapBendEditor (SnapBendProcessor& p)
     addAndMakeVisible (autoRangeButton);
     addAndMakeVisible (clearButton);
     addAndMakeVisible (panicButton);
+    addAndMakeVisible (calibrateButton);
     addAndMakeVisible (zoomControls);
 
     addChildComponent (rangeWarning); // hidden until it is needed
@@ -138,6 +139,22 @@ SnapBendEditor::SnapBendEditor (SnapBendProcessor& p)
     };
 
     bendLane.setZoom (processor.getHorizontalZoom(), processor.getVerticalZoom());
+
+    calibrateButton.setClickingTogglesState (true);
+    calibrateButton.setColour (juce::TextButton::buttonOnColourId, snapbend::colours::accent);
+    calibrateButton.setTooltip (
+        "Plays two notes over and over: a reference note, then the same pitch "
+        "reached by bending.\n\n"
+        "If the synth's bend range is right they sound identical. If you hear "
+        "the pitch jump between them, turn FINE until the jump disappears.\n\n"
+        "If turning FINE down never fixes it, the synth's real range is smaller "
+        "than RANGE — lower both.");
+
+    calibrateButton.onClick = [this]
+    {
+        processor.setCalibrating (calibrateButton.getToggleState());
+        bendLane.setCalibrating (calibrateButton.getToggleState());
+    };
 
     autoRangeButton.setTooltip (
         "Sends the bend range to the synth over MIDI (RPN, on CC 6 and CC 38).\n\n"
@@ -289,10 +306,13 @@ void SnapBendEditor::resized()
     //
     // The synth-range toggle on the left, zoom on the right. Keeping both out
     // of the header stops the top of the window turning into a toolbar.
-    auto strip = area.removeFromBottom (30).reduced (20, 4);
+    auto strip = area.removeFromBottom (30).reduced (20, 2);
 
     zoomControls.setBounds (strip.removeFromRight (240));
     strip.removeFromRight (20);
+
+    calibrateButton.setBounds (strip.removeFromLeft (92));
+    strip.removeFromLeft (14);
     autoRangeButton.setBounds (strip);
 
     // ---- the lane -------------------------------------------------------

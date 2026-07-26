@@ -74,4 +74,8 @@ RawMidiEvent makeCentredBend (int channel, int sampleOffset = 0) noexcept;
 /** A pitch bend message for an arbitrary 14-bit value. */
 RawMidiEvent makeBend (int bendValue, int channel, int sampleOffset = 0) noexcept;
 
+/** Note on/off, used by the calibration tone. */
+RawMidiEvent makeNoteOn (int note, int velocity, int channel, int sampleOffset = 0) noexcept;
+RawMidiEvent makeNoteOff (int note, int channel, int sampleOffset = 0) noexcept;
+
 } // namespace snapbend

@@ -751,63 +751,92 @@ static double semitonesOfLastBend (const std::vector<RawMidiEvent>& events, doub
     return pitchBendToSemitones (value, range);
 }
 
-TEST (fine_tune_shifts_full_bend_by_the_stated_cents)
+TEST (fine_tune_adjusts_the_range_we_encode_against)
 {
-    BendCurve curve;
-    curve.addNode ({ 0.0, -11.0, 0.0 }); // just inside the range, so nothing clamps
-
+    // FINE says "the synth's real range is this many cents wider than it
+    // claims", so the encoded value is scaled down to compensate.
     BendEmitter emitter;
     emitter.prepare (48000.0);
 
     EmitterSettings settings;
     settings.bendRangeSemitones = 12.0;
-    settings.fineTuneCents      = 0.0;
+    settings.fineTuneCents      = 50.0;
     emitter.setSettings (settings);
 
-    const double plain = semitonesOfLastBend (
-        emitter.processBlock (curve, { true, 0.0, 120.0 }, 512), 12.0);
+    CHECK_NEAR (emitter.getEffectiveRange(), 12.5, 1e-9);
+}
 
-    CHECK_NEAR (plain, -11.0, 0.01);
+TEST (fine_tune_still_works_at_the_very_bottom_of_the_bend)
+{
+    // The bug this exists to catch. Applying the trim by scaling the *value*
+    // pushed a full-range bend past the rail, where it clamped and the
+    // correction vanished — at exactly the point anyone would test it.
+    BendCurve curve;
+    curve.addNode ({ 0.0, -12.0, 0.0 }); // all the way down
 
-    // 50 cents of trim, measured at full bend, is 11/12 of that at 11 semitones.
-    BendEmitter trimmed;
+    BendEmitter plain, trimmed;
+    plain.prepare (48000.0);
     trimmed.prepare (48000.0);
+
+    EmitterSettings settings;
+    settings.bendRangeSemitones = 12.0;
+    plain.setSettings (settings);
 
     settings.fineTuneCents = 50.0;
     trimmed.setSettings (settings);
 
-    const double corrected = semitonesOfLastBend (
-        trimmed.processBlock (curve, { true, 0.0, 120.0 }, 512), 12.0);
+    const auto plainEvents   = plain.processBlock (curve, { true, 0.0, 120.0 }, 512);
+    const auto trimmedEvents = trimmed.processBlock (curve, { true, 0.0, 120.0 }, 512);
 
-    CHECK_NEAR (corrected, -11.0 - (11.0 / 12.0) * 0.5, 0.01);
+    const auto rawValue = [] (const std::vector<RawMidiEvent>& events)
+    {
+        int value = pitchBendCentre;
+
+        for (const auto& e : events)
+            if ((e.status & 0xF0) == 0xE0)
+                value = (static_cast<int> (e.data2) << 7) | static_cast<int> (e.data1);
+
+        return value;
+    };
+
+    // Untrimmed, a full downward bend sits on the rail.
+    CHECK_EQ (rawValue (plainEvents), 0);
+
+    // Trimmed, it must move off the rail — if these are equal the correction
+    // has been clamped away and FINE does nothing where it matters most.
+    CHECK (rawValue (trimmedEvents) > 0);
+
+    // 12 semitones out of an assumed 12.5 is 96% of full travel.
+    CHECK_NEAR (static_cast<double> (rawValue (trimmedEvents)),
+                pitchBendCentre * (1.0 - 12.0 / 12.5), 2.0);
 }
 
-TEST (fine_tune_is_proportional_so_nulling_it_once_nulls_it_everywhere)
+TEST (fine_tune_correction_holds_at_every_depth)
 {
-    // A range mismatch is a scale error, not an offset. If this were applied as
-    // a fixed offset, correcting it at full bend would break the middle.
+    // Nulling the trim once must null it everywhere, not just at the extreme.
     BendEmitter emitter;
     emitter.prepare (48000.0);
 
     EmitterSettings settings;
     settings.bendRangeSemitones = 12.0;
-    settings.fineTuneCents      = 100.0; // one semitone at full bend
+    settings.fineTuneCents      = 100.0; // synth really bends 13 semitones
     emitter.setSettings (settings);
 
-    for (double drawn : { -12.0, -6.0, -3.0, 3.0, 6.0, 12.0 })
+    for (double drawn : { -12.0, -7.0, -3.0, 3.0, 7.0, 12.0 })
     {
         BendCurve curve;
-        curve.addNode ({ 0.0, drawn * 0.9, 0.0 }); // scaled in to avoid clamping
+        curve.addNode ({ 0.0, drawn, 0.0 });
 
         BendEmitter fresh;
         fresh.prepare (48000.0);
         fresh.setSettings (settings);
 
-        const double expected = drawn * 0.9 * (1.0 + 1.0 / 12.0);
-        const double actual   = semitonesOfLastBend (
-            fresh.processBlock (curve, { true, 0.0, 120.0 }, 512), 12.0);
+        // Decoded against the synth's true range of 13, the sounding pitch must
+        // come back to exactly what was drawn.
+        const double sounded = semitonesOfLastBend (
+            fresh.processBlock (curve, { true, 0.0, 120.0 }, 512), 13.0);
 
-        CHECK_NEAR (actual, expected, 0.02);
+        CHECK_NEAR (sounded, drawn, 0.01);
     }
 }
 
@@ -829,6 +858,101 @@ TEST (fine_tune_leaves_the_centre_alone)
         const auto events = emitter.processBlock (curve, { true, 0.0, 120.0 }, 512);
         CHECK_NEAR (semitonesOfLastBend (events, 12.0), 0.0, 0.001);
     }
+}
+
+// =============================================================================
+// The calibration tone
+// =============================================================================
+
+static bool containsNoteOn (const std::vector<RawMidiEvent>& events, int note)
+{
+    return std::any_of (events.begin(), events.end(),
+                        [note] (const RawMidiEvent& e)
+                        {
+                            return (e.status & 0xF0) == 0x90 && e.data1 == note;
+                        });
+}
+
+TEST (calibration_alternates_a_reference_note_with_a_bent_one)
+{
+    BendEmitter emitter;
+    emitter.prepare (1000.0); // 1000 samples per second keeps the test readable
+
+    EmitterSettings settings;
+    settings.bendRangeSemitones = 12.0;
+    emitter.setSettings (settings);
+
+    // First second: the reference, an octave up, played straight.
+    const auto first = emitter.processCalibrationBlock (500);
+    CHECK (containsNoteOn (first, 72));
+    CHECK (containsCentredBend (first));
+
+    // Second second: the root note bent up to meet it.
+    emitter.processCalibrationBlock (500);
+    const auto second = emitter.processCalibrationBlock (500);
+
+    CHECK (containsNoteOn (second, 60));
+}
+
+TEST (calibration_bends_by_exactly_the_range)
+{
+    BendEmitter emitter;
+    emitter.prepare (1000.0);
+
+    EmitterSettings settings;
+    settings.bendRangeSemitones = 12.0;
+    emitter.setSettings (settings);
+
+    emitter.processCalibrationBlock (1000); // reference phase
+    const auto bent = emitter.processCalibrationBlock (10); // start of bent phase
+
+    // With no trim, reaching the top of the range means the top of the travel.
+    int bendValue = -1;
+    for (const auto& e : bent)
+        if ((e.status & 0xF0) == 0xE0)
+            bendValue = (static_cast<int> (e.data2) << 7) | static_cast<int> (e.data1);
+
+    CHECK_EQ (bendValue, pitchBendMax);
+}
+
+TEST (calibration_never_leaves_a_note_hanging)
+{
+    BendEmitter emitter;
+    emitter.prepare (1000.0);
+
+    emitter.processCalibrationBlock (500);
+    CHECK (emitter.getCalibrationNote() >= 0);
+
+    const auto stopping = emitter.stopCalibration();
+
+    const bool hasNoteOff = std::any_of (stopping.begin(), stopping.end(),
+                                         [] (const RawMidiEvent& e)
+                                         { return (e.status & 0xF0) == 0x80; });
+
+    CHECK (hasNoteOff);
+    CHECK (containsCentredBend (stopping));
+    CHECK_EQ (emitter.getCalibrationNote(), -1);
+}
+
+TEST (calibration_switches_notes_cleanly_at_every_change)
+{
+    // Every note-on must be preceded by a note-off for the previous one, or the
+    // synth ends up with a pile of stuck notes.
+    BendEmitter emitter;
+    emitter.prepare (1000.0);
+
+    int sounding = 0;
+
+    for (int block = 0; block < 40; ++block)
+        for (const auto& e : emitter.processCalibrationBlock (128))
+        {
+            if ((e.status & 0xF0) == 0x90) ++sounding;
+            if ((e.status & 0xF0) == 0x80) --sounding;
+
+            // Never more than one note at a time.
+            CHECK (sounding >= 0);
+            CHECK (sounding <= 1);
+        }
 }
 
 TEST (safety_reset_always_centres)

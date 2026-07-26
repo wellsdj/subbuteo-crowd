@@ -71,6 +71,10 @@ public:
         whenever the plugin is bypassed, so nothing is left detuned. */
     void requestSafetyReset() noexcept { safetyResetPending.store (true); }
 
+    /** Plays the alternating reference/bent note pair used to set FINE by ear. */
+    void setCalibrating (bool shouldCalibrate) noexcept { calibrating.store (shouldCalibrate); }
+    bool isCalibrating() const noexcept { return calibrating.load(); }
+
     juce::AudioProcessorValueTreeState apvts;
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
@@ -90,6 +94,8 @@ private:
     std::atomic<double> currentBeat        { 0.0 };
     std::atomic<bool>   transportRunning   { false };
     std::atomic<bool>   safetyResetPending { false };
+    std::atomic<bool>   calibrating        { false };
+    bool                wasCalibrating     = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SnapBendProcessor)
 };

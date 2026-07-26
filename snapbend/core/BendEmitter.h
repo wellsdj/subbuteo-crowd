@@ -88,6 +88,27 @@ public:
         editor being closed mid-bend. */
     std::vector<RawMidiEvent> makeSafetyReset();
 
+    /** The range actually used when encoding, i.e. RANGE corrected by FINE. */
+    double getEffectiveRange() const noexcept;
+
+    // ---- calibration ----------------------------------------------------
+    //
+    // Tuning a bend by ear against nothing is hopeless — a few cents out is
+    // inaudible on its own but obvious the moment you have something to
+    // compare against. So this alternates two notes that must be identical if
+    // the range is right: a reference note played directly, and the same pitch
+    // reached by bending. Any mismatch is heard as a jump between them, which
+    // the ear resolves far finer than absolute pitch.
+
+    /** One second of reference, one second of bend, repeating. */
+    std::vector<RawMidiEvent> processCalibrationBlock (int numSamples);
+
+    /** Silences the calibration note and re-centres. Safe to call at any time. */
+    std::vector<RawMidiEvent> stopCalibration();
+
+    /** The note the calibration tone is currently sounding, or -1. */
+    int getCalibrationNote() const noexcept { return calibrationNote; }
+
 private:
     EmitterSettings settings;
     double          sampleRate    = 44100.0;
@@ -95,6 +116,9 @@ private:
     bool            wasPlaying    = false;
     bool            rangeSent     = false;
     bool            wasEnabled    = false; ///< so switching off can un-bend the synth exactly once
+
+    long long       calibrationCounter = 0;
+    int             calibrationNote    = -1;  ///< -1 when nothing is sounding
 };
 
 } // namespace snapbend

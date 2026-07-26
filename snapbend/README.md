@@ -53,15 +53,28 @@ instrument sounds exactly as it does with the plugin taken off the strip.
 This matters beyond tidiness — it previously swallowed pitch bend coming from
 the region or your keyboard even while idle.
 
-### If the semitones are slightly out
+### Getting the semitones exactly right
 
-Bend all the way down, hold it, and compare against the note a semitone-count
-lower on the keyboard. If it is a little sharp or flat, the synth's real bend
-range is not quite what it claims.
+If bends land close but not quite on the note, the synth's real bend range is
+not quite the one it reports. **FINE** corrects it: the value is "the synth's
+real range is this many cents wider than it claims", and it is applied to the
+range used for encoding rather than to the bend value itself.
 
-Turn **FINE** until it is in tune. The trim is applied as a scale rather than a
-fixed offset, because a range mismatch is worst at the extremes and vanishes at
-the centre — so nulling it at full bend nulls it at every depth.
+That distinction matters. Scaling the value looks equivalent, and is in the
+middle of the range, but a full-range bend plus a correction falls outside the
+range and clamps to the rail — so the trim did nothing at exactly the point
+where the error is largest and where anyone would test it.
+
+**Press Calibrate** rather than guessing. It plays two notes in turn: a
+reference note, and the same pitch reached by bending. If the range is right
+they are identical; if not you hear the pitch jump between them. Turn FINE until
+the jump disappears. Matching two pitches against each other resolves far finer
+than judging one in isolation — a couple of cents is obvious this way and
+inaudible otherwise.
+
+If turning FINE *down* never fixes it, the synth's real range is **smaller**
+than RANGE, and the bend is physically unable to reach the target. Lower RANGE
+and the synth's setting together.
 
 The other classic failures are handled too:
 
@@ -78,13 +91,16 @@ The other classic failures are handled too:
 | Knob | What it does |
 | --- | --- |
 | **RANGE** | How far the synth is allowed to bend, 1–48 semitones. Set this to match what the synth is set to. |
-| **FINE** | Corrects a synth whose real bend range does not quite match its setting. Measured in cents at full bend. |
+| **FINE** | Corrects a synth whose real bend range does not quite match its setting, in cents. Use **Calibrate** to set it by ear. |
 | **CURVE** | Leans every slide towards moving early or late, without editing any points. |
 | **SNAP** | Fully clockwise locks to whole semitones. Anticlockwise loosens it, for bends that deliberately sit just under the note. |
 | **MIX** | Scales the whole effect, 0% to 100%. |
 
 **Send bend range to synth** — **off by default, and it should usually stay
 off.** See below.
+
+**Calibrate** — plays a reference note and a bent note in turn so you can set
+FINE precisely. See below.
 
 **Clear points** — throws away the whole curve and starts again.
 
@@ -93,10 +109,12 @@ hanging.
 
 ### Editing
 
-- **Click** empty space to add a point
+- **Click anywhere — including directly on the line — to add a point.** It
+  lands on the nearest semitone, so a click that was never going to be
+  pixel-accurate still gives an exact interval, which you can then drag.
 - **Drag** a point to move it (snapping to semitones and to the beat grid)
-- **Drag the line** between two points to curve the slide
 - **Right-click** a point to remove it (double-click works too)
+- **⌘-drag the line** between two points to curve the slide
 - **Hold Alt** while dragging to ignore the grid entirely
 
 ### The ruler and playhead

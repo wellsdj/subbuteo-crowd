@@ -88,6 +88,7 @@ private:
     // button: throwing away the drawn points, and un-bending a stuck synth.
     juce::TextButton   clearButton     { "Clear points" };
     juce::TextButton   panicButton     { "Reset pitch" };
+    juce::TextButton   calibrateButton { "Calibrate" };
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
