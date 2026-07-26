@@ -32,6 +32,10 @@ public:
 
     void setPlayheadPosition (double beat, bool isPlaying);
 
+    /** The host's time signature, so the bar ruler counts bars the way Logic
+        does rather than assuming 4/4. */
+    void setTimeSignature (int numerator, int denominator);
+
     /** Zoom, 0 = fully out, 1 = fully in, 0.5 = the default view.
         Horizontal sets how much of the timeline is on screen, vertical how
         many semitones. */
@@ -59,6 +63,9 @@ private:
 
     juce::Rectangle<float> getLaneBounds() const;
 
+    /** The bar-number strip along the top, as in Logic's own editors. */
+    juce::Rectangle<float> getRulerBounds() const;
+
     float  beatToX (double beat) const;
     double xToBeat (float x) const;
     float  semitoneToY (double semitones) const;
@@ -82,7 +89,11 @@ private:
     void drawCurve (juce::Graphics&, juce::Rectangle<float> lane) const;
     void drawNodes (juce::Graphics&) const;
     void drawPlayhead (juce::Graphics&, juce::Rectangle<float> lane) const;
+    void drawRuler (juce::Graphics&, juce::Rectangle<float> ruler) const;
     void drawEmptyHint (juce::Graphics&, juce::Rectangle<float> lane) const;
+
+    /** Bar number at a musical position, counting from 1 as Logic does. */
+    int getBarNumber (double beat) const;
 
     double applySnapToSemitone (double raw, bool snapDisabled) const;
     double applySnapToBeat (double raw, bool snapDisabled) const;
@@ -101,7 +112,10 @@ private:
 
     double viewStartBeat = 0.0;
     double beatGrid      = 0.25;   ///< sixteenth notes
-    int    beatsPerBar   = 4;
+
+    /** Quarter notes per bar. 4 in 4/4, 3 in 6/8, and so on — the host tells
+        us, we do not assume. */
+    double quartersPerBar = 4.0;
 
     /** Zoom, 0..1. Both default to the middle, which gives four bars across
         and a little past the bend range vertically. */

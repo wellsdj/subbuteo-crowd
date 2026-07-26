@@ -63,6 +63,10 @@ public:
     double getCurrentBeat() const noexcept { return currentBeat.load(); }
     bool   isPlaying()      const noexcept { return transportRunning.load(); }
 
+    /** The host's time signature, for the bar ruler. */
+    int getTimeSignatureNumerator()   const noexcept { return timeSigNumerator.load(); }
+    int getTimeSignatureDenominator() const noexcept { return timeSigDenominator.load(); }
+
     /** Sends a centred bend on the next block. Used by the panic button, and
         whenever the plugin is bypassed, so nothing is left detuned. */
     void requestSafetyReset() noexcept { safetyResetPending.store (true); }
@@ -79,6 +83,9 @@ private:
 
     std::atomic<double> horizontalZoom     { 0.5 };
     std::atomic<double> verticalZoom       { 0.5 };
+
+    std::atomic<int>    timeSigNumerator   { 4 };
+    std::atomic<int>    timeSigDenominator { 4 };
 
     std::atomic<double> currentBeat        { 0.0 };
     std::atomic<bool>   transportRunning   { false };

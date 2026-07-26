@@ -9,6 +9,9 @@ namespace
     constexpr float labelGutter = 46.0f;
     constexpr float lanePadding = 10.0f;
 
+    /** Bar-number strip along the top, matching the proportions Logic uses. */
+    constexpr float rulerHeight = 22.0f;
+
     /** Semitones that get a brighter line, because they are the ones people
         actually bend to: octave, fifth, fourth, minor/major third, tone. */
     bool isLandmarkInterval (int semitone)
@@ -73,6 +76,16 @@ void BendLaneComponent::setShapeBias (double bias)
 
 void BendLaneComponent::setPlayheadPosition (double beat, bool isPlaying)
 {
+    // This arrives on a timer, so it fires whether or not anything moved.
+    // Repainting regardless meant the whole lane — grid, curve, every label —
+    // was redrawn thirty times a second while sitting completely still, which
+    // is what made dragging feel sticky.
+    const bool positionMoved = std::abs (beat - playheadBeat) > 1.0e-9;
+    const bool stateChanged  = isPlaying != transportRunning;
+
+    if (! positionMoved && ! stateChanged)
+        return;
+
     playheadBeat     = beat;
     transportRunning = isPlaying;
 
@@ -135,7 +148,37 @@ juce::Rectangle<float> BendLaneComponent::getLaneBounds() const
 {
     return getLocalBounds().toFloat()
              .withTrimmedLeft (labelGutter)
+             .withTrimmedTop (rulerHeight)
              .reduced (0.0f, lanePadding);
+}
+
+juce::Rectangle<float> BendLaneComponent::getRulerBounds() const
+{
+    return getLocalBounds().toFloat()
+             .withTrimmedLeft (labelGutter)
+             .withHeight (rulerHeight);
+}
+
+int BendLaneComponent::getBarNumber (double beat) const
+{
+    // Logic counts bars from 1, and a project starts at bar 1 rather than 0.
+    return static_cast<int> (std::floor (beat / quartersPerBar)) + 1;
+}
+
+void BendLaneComponent::setTimeSignature (int numerator, int denominator)
+{
+    if (numerator <= 0 || denominator <= 0)
+        return;
+
+    // A bar of 6/8 is three quarter notes, not six — the playhead is reported
+    // in quarter notes regardless of what the bar is made of.
+    const double newQuartersPerBar = numerator * 4.0 / denominator;
+
+    if (std::abs (newQuartersPerBar - quartersPerBar) > 1.0e-9)
+    {
+        quartersPerBar = newQuartersPerBar;
+        repaint();
+    }
 }
 
 double BendLaneComponent::getDisplayRange() const
@@ -264,6 +307,11 @@ void BendLaneComponent::mouseDown (const juce::MouseEvent& event)
 {
     const auto position = event.position;
 
+    // The ruler is for reading, not editing. Clicking it used to drop a point
+    // at the very top of the range.
+    if (getRulerBounds().contains (position))
+        return;
+
     // Holding alt escapes the grid entirely, for bends that deliberately sit
     // just under the note.
     const bool snapDisabled = event.mods.isAltDown();
@@ -310,7 +358,9 @@ void BendLaneComponent::mouseDown (const juce::MouseEvent& event)
     }
 
     // Empty space: drop a new point here and start dragging it immediately.
-    const double beat      = applySnapToBeat (xToBeat (position.x), snapDisabled);
+    // Beats are clamped at zero — there is no music before the start of the
+    // project, and a point dragged off the left edge used to vanish there.
+    const double beat      = juce::jmax (0.0, applySnapToBeat (xToBeat (position.x), snapDisabled));
     const double semitones = applySnapToSemitone (yToSemitone (position.y), snapDisabled);
 
     dragIndex = static_cast<int> (curve.addNode ({ beat, semitones, 0.0 }));
@@ -329,7 +379,8 @@ void BendLaneComponent::mouseDrag (const juce::MouseEvent& event)
 
     if (dragMode == DragMode::node)
     {
-        const double beat      = applySnapToBeat (xToBeat (event.position.x), snapDisabled);
+        const double beat      = juce::jmax (0.0, applySnapToBeat (xToBeat (event.position.x),
+                                                                   snapDisabled));
         const double semitones = juce::jlimit (-getDisplayRange(), getDisplayRange(),
                                                applySnapToSemitone (yToSemitone (event.position.y),
                                                                     snapDisabled));
@@ -458,6 +509,7 @@ void BendLaneComponent::paint (juce::Graphics& g)
 
     drawNodes (g);
     drawPlayhead (g, lane);
+    drawRuler (g, getRulerBounds());
 }
 
 void BendLaneComponent::drawOutOfRangeZones (juce::Graphics& g, juce::Rectangle<float> lane) const
@@ -559,7 +611,7 @@ void BendLaneComponent::drawBeatGrid (juce::Graphics& g, juce::Rectangle<float> 
         if (x < lane.getX() - 1.0f || x > lane.getRight() + 1.0f)
             continue;
 
-        const bool barLine = std::fmod (std::abs (beat), static_cast<double> (beatsPerBar)) < 1.0e-6;
+        const bool barLine = std::fmod (std::abs (beat), quartersPerBar) < 1.0e-6;
 
         g.setColour (barLine ? colours::gridLineBold : colours::gridLine);
         g.fillRect (x, lane.getY(), barLine ? 1.4f : 1.0f, lane.getHeight());
@@ -648,15 +700,15 @@ void BendLaneComponent::drawNodes (juce::Graphics& g) const
 
 void BendLaneComponent::drawPlayhead (juce::Graphics& g, juce::Rectangle<float> lane) const
 {
-    if (! transportRunning)
-        return;
-
     const float x = beatToX (playheadBeat);
 
     if (x < lane.getX() || x > lane.getRight())
         return;
 
-    g.setColour (colours::playhead.withAlpha (0.55f));
+    // Visible whether or not the transport is running — when stopped it marks
+    // where playback will start from, which is how Logic behaves and is the
+    // only way to line a bend up with a note before pressing play.
+    g.setColour (colours::playhead.withAlpha (transportRunning ? 0.65f : 0.3f));
     g.fillRect (x, lane.getY(), 1.0f, lane.getHeight());
 
     // A dot riding the curve, so you can see the bend happening.
@@ -664,8 +716,69 @@ void BendLaneComponent::drawPlayhead (juce::Graphics& g, juce::Rectangle<float> 
     {
         const float y = semitoneToY (curve.valueAtBeat (playheadBeat, shapeBias));
 
-        g.setColour (colours::playhead);
+        g.setColour (colours::playhead.withAlpha (transportRunning ? 1.0f : 0.45f));
         g.fillEllipse (juce::Rectangle<float> (7.0f, 7.0f).withCentre ({ x, y }));
+    }
+}
+
+void BendLaneComponent::drawRuler (juce::Graphics& g, juce::Rectangle<float> ruler) const
+{
+    g.setColour (colours::panelRaised);
+    g.fillRect (ruler);
+
+    g.setColour (colours::gridLineBold);
+    g.fillRect (ruler.getX(), ruler.getBottom() - 1.0f, ruler.getWidth(), 1.0f);
+
+    const double firstBar = std::floor (viewStartBeat / quartersPerBar);
+    const double lastBeat = viewStartBeat + getVisibleBeats();
+
+    // Thin the numbering out rather than letting bar labels collide.
+    const double pixelsPerBar = ruler.getWidth() / (getVisibleBeats() / quartersPerBar);
+
+    // Squeezed to nothing by a resize, there is nothing worth drawing — and
+    // without this guard the loop below would never terminate.
+    if (pixelsPerBar <= 0.0)
+        return;
+
+    int barStep = 1;
+    while (pixelsPerBar * barStep < 46.0 && barStep < 1024)
+        barStep *= 2;
+
+    for (double bar = firstBar; bar * quartersPerBar <= lastBeat; bar += 1.0)
+    {
+        const double beat = bar * quartersPerBar;
+        const float  x    = beatToX (beat);
+
+        if (x < ruler.getX() - 1.0f || x > ruler.getRight() + 1.0f)
+            continue;
+
+        const int barNumber = getBarNumber (beat + 1.0e-9);
+
+        if ((barNumber - 1) % barStep != 0)
+            continue;
+
+        g.setColour (colours::gridLineBold);
+        g.fillRect (x, ruler.getY() + 6.0f, 1.0f, ruler.getHeight() - 7.0f);
+
+        g.setColour (colours::textDim);
+        g.setFont (juce::Font (juce::FontOptions (10.5f)));
+        g.drawText (juce::String (barNumber),
+                    juce::Rectangle<float> (x + 8.0f, ruler.getY(), 40.0f, ruler.getHeight()),
+                    juce::Justification::centredLeft, false);
+    }
+
+    // The playhead's head, sitting in the ruler exactly as it does in Logic.
+    const float playheadX = beatToX (playheadBeat);
+
+    if (playheadX >= ruler.getX() && playheadX <= ruler.getRight())
+    {
+        juce::Path head;
+        head.addTriangle (playheadX - 5.0f, ruler.getY() + 3.0f,
+                          playheadX + 5.0f, ruler.getY() + 3.0f,
+                          playheadX,        ruler.getBottom() - 3.0f);
+
+        g.setColour (colours::playhead.withAlpha (transportRunning ? 0.95f : 0.45f));
+        g.fillPath (head);
     }
 }
 

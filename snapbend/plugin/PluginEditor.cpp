@@ -92,6 +92,7 @@ SnapBendEditor::SnapBendEditor (SnapBendProcessor& p)
     bendLane.onCurveChanged = [this] (const snapbend::BendCurve& newCurve)
     {
         processor.setCurve (newCurve);
+        curveDirty = true;
         refreshRangeWarning();
     };
 
@@ -172,6 +173,8 @@ SnapBendEditor::~SnapBendEditor()
 void SnapBendEditor::timerCallback()
 {
     bendLane.setPlayheadPosition (processor.getCurrentBeat(), processor.isPlaying());
+    bendLane.setTimeSignature (processor.getTimeSignatureNumerator(),
+                               processor.getTimeSignatureDenominator());
 
     const double range = processor.apvts.getRawParameterValue ("range")->load();
     const double snap  = processor.apvts.getRawParameterValue ("snap")->load();
@@ -193,7 +196,15 @@ void SnapBendEditor::timerCallback()
 void SnapBendEditor::refreshRangeWarning()
 {
     const double range = processor.apvts.getRawParameterValue ("range")->load();
-    const auto requirement = processor.getCurve().getRangeRequirement (range);
+
+    if (curveDirty || std::abs (range - lastCheckedRange) > 1.0e-9)
+    {
+        cachedRequirement = processor.getCurve().getRangeRequirement (range);
+        lastCheckedRange  = range;
+        curveDirty        = false;
+    }
+
+    const auto& requirement = cachedRequirement;
 
     if (! requirement.exceedsRange)
     {

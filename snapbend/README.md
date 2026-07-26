@@ -99,6 +99,19 @@ hanging.
 - **Right-click** a point to remove it (double-click works too)
 - **Hold Alt** while dragging to ignore the grid entirely
 
+### The ruler and playhead
+
+A bar ruler runs along the top, numbered from bar 1 like Logic's own editors,
+and following the host's time signature rather than assuming 4/4.
+
+The playhead is drawn as a marker in the ruler and a line down the lane. It is
+visible **whether or not the transport is running** — when stopped it shows
+where playback will start from, which is how you line a bend up against a note
+before pressing play. While playing, a dot rides the curve so you can watch the
+bend happen.
+
+The ruler is read-only; clicking it does not add points.
+
 ### Zoom
 
 The two sliders at the bottom right work like the zoom controls in Logic's own

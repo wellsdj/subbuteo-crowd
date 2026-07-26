@@ -114,6 +114,12 @@ void SnapBendProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
             if (const auto bpm = position->getBpm())
                 transport.bpm = *bpm;
+
+            if (const auto timeSig = position->getTimeSignature())
+            {
+                timeSigNumerator.store (timeSig->numerator);
+                timeSigDenominator.store (timeSig->denominator);
+            }
         }
     }
 

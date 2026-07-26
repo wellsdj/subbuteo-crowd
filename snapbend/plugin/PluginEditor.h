@@ -104,5 +104,12 @@ private:
     double lastWarnedRequirement = -1.0;
     double lastWarnedRange       = -1.0;
 
+    /** Working out whether a warning is needed means copying the curve under a
+        lock. That is cheap, but not thirty times a second for no reason — so
+        it only happens when the curve or the range has actually moved. */
+    bool   curveDirty       = true;
+    double lastCheckedRange = -1.0;
+    snapbend::RangeRequirement cachedRequirement;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SnapBendEditor)
 };
