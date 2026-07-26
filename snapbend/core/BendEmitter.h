@@ -2,8 +2,6 @@
 //
 // This class is where the well-known pitch bend bugs get killed:
 //
-//   * the synth is told its bend range up front (RPN 0,0), so "snap to a
-//     semitone" is true rather than aspirational;
 //   * bend is returned to centre on stop, so nothing is left detuned;
 //   * values are emitted on a fine grid with sample offsets, so slides are
 //     smooth rather than stepped once per audio block;
@@ -25,17 +23,14 @@ struct EmitterSettings
         single byte of the MIDI passing through it. */
     bool enabled = true;
 
-    /** Semitone range we ask the synth for, and assume when converting. */
+    /** The bend range the synth is set to, in semitones.
+
+        This is the single number the whole plugin depends on, and it is not
+        negotiable: pitch bend carries a fraction of a range, not a pitch, so
+        if this does not match the synth then nothing else can make the
+        semitones land. Fractional values are allowed, because a synth's real
+        range is not always the round number on its own display. */
     double bendRangeSemitones = 12.0;
-
-    /** Trim, in cents at full bend, for synths whose real bend range does not
-        quite match what they claim.
-
-        A range mismatch produces an error proportional to how far you have
-        bent — nothing at rest, worst at the extremes — so this is applied as a
-        scale rather than a fixed offset. That way nulling it at full bend
-        nulls it everywhere. */
-    double fineTuneCents = 0.0;
 
     /** The Mix knob: scales the whole curve. 0 = dry/no bend, 1 = as drawn. */
     double depth = 1.0;
@@ -49,15 +44,6 @@ struct EmitterSettings
 
     /** MIDI channel to send on, 1-16. */
     int channel = 1;
-
-    /** Whether to transmit the RPN range handshake.
-
-        Off by default, and deliberately so. The handshake is carried on CC 6
-        and CC 38, and a synth that does not implement RPN will happily apply
-        those to whatever they are mapped to instead — changing the patch's
-        filter, envelope or macros the moment the plugin loads. Opt in only
-        when the synth is known to handle RPN. */
-    bool sendRangeRPN = false;
 };
 
 struct TransportInfo
@@ -72,8 +58,7 @@ class BendEmitter
 public:
     void prepare (double sampleRateToUse);
 
-    /** Forgets all cached state. The next playing block re-sends the range
-        handshake and re-transmits the current bend value. */
+    /** Forgets all cached state, so the current bend value is re-transmitted. */
     void reset();
 
     void setSettings (const EmitterSettings& newSettings);
@@ -88,8 +73,16 @@ public:
         editor being closed mid-bend. */
     std::vector<RawMidiEvent> makeSafetyReset();
 
-    /** The range actually used when encoding, i.e. RANGE corrected by FINE. */
+    /** The range used when encoding, clamped to what MIDI can express. */
     double getEffectiveRange() const noexcept;
+
+    /** The RPN 0,0 handshake telling the synth what range to use.
+
+        Deliberately not sent automatically. It rides on CC 6 and CC 38, and a
+        synth that does not implement RPN applies those to whatever they happen
+        to be mapped to — so firing it off on load can quietly wreck a patch.
+        As a button the user presses, the cause and effect are obvious. */
+    std::vector<RawMidiEvent> makeRangeAnnouncement();
 
     // ---- calibration ----------------------------------------------------
     //
@@ -114,7 +107,6 @@ private:
     double          sampleRate    = 44100.0;
     int             lastSentBend  = -1;    ///< -1 means "nothing sent yet"
     bool            wasPlaying    = false;
-    bool            rangeSent     = false;
     bool            wasEnabled    = false; ///< so switching off can un-bend the synth exactly once
 
     long long       calibrationCounter = 0;

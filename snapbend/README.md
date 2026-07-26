@@ -25,24 +25,55 @@ it and cannot: Logic exposes no way for a plugin to touch its editor.
 
 ## Why bends usually go wrong, and what this does about it
 
-Nearly every synth ignores large bends unless you ask permission first. Out of
-the box the MIDI standard allows **±2 semitones**, so a drawn 7-semitone bend
-comes out around 1.2 and the plugin looks broken.
+Nearly every synth ships with a bend range of **±2 semitones**. Draw a 12
+semitone bend against that and you hear about 2 — six times too small — and
+the plugin looks broken.
 
-SnapBend can transmit an **RPN 0,0 (Pitch Bend Sensitivity)** message to set the
-synth's range for you, but **this is off by default and usually should stay
-off**. The handshake is carried on **CC 6** and **CC 38**, and a synth that does
-not implement RPN does not ignore those messages — it applies them to whatever
-they happen to be mapped to on that patch. The result is a filter, envelope or
-macro moving the instant the plugin loads, which sounds like the plugin has
-ruined your patch. It has.
+SnapBend cannot know what your synth's range is, and it cannot work around it.
+Pitch bend does not carry a pitch — it carries *a fraction of a range* — so
+"bend to the top" means +2 semitones on a synth set to 2 and +12 on a synth set
+to 12. If **RANGE** does not match the synth, every bend is wrong by the same
+multiple, and no amount of trimming will fix it.
 
-So the reliable route is to **set the bend range in the synth by hand** and put
-the same number in the RANGE knob. Turn the handshake on only for synths you
-know handle RPN properly.
+So there is exactly one rule: **RANGE must equal the synth's own bend range.**
+Get that right and every semitone on the grid is exact.
 
-If you drag a bend past what the synth has been allowed, a prompt appears
-telling you — in plain words — to go and raise the range in the synth itself.
+### Finding it: press Calibrate
+
+Rather than guessing, press **Calibrate**. It plays two notes over and over: a
+reference note, and the same pitch reached by bending. Turn **RANGE** until they
+stop jumping — at that point RANGE reads your synth's real range.
+
+Matching two pitches against each other is far more precise than judging one in
+isolation, so this resolves down to a couple of cents. RANGE accepts fractional
+values for exactly that reason: a synth's true range is not always the round
+number on its display.
+
+If the number you land on is smaller than you want, raise the bend range **in
+the synth** and calibrate again.
+
+### Where the setting lives
+
+| Synth | Where |
+| --- | --- |
+| **Serum / Serum 2** | Global tab → Pitch Bend Range. Defaults to **2**. |
+| **Logic's own instruments** (ES2, Retro Synth, Sculpture…) | Bend range in the synth's own settings, usually 2 |
+| **Most others** | Look for "Bend Range", "Pitch Bend Up/Down", or "Pitch Bend Sensitivity" |
+
+Nearly everything ships at **±2 semitones**. That is the single most likely
+reason a bend sounds far too small.
+
+### Set synth range
+
+**Set synth range** asks the synth to change its range to RANGE over MIDI
+(RPN 0,0), once, when you press it.
+
+It is a button rather than something automatic on purpose. The message rides on
+**CC 6** and **CC 38**, and a synth that does not implement RPN does not ignore
+them — it applies them to whatever those CCs happen to be mapped to, moving a
+filter or an envelope and appearing to wreck the patch. As a deliberate press,
+cause and effect are at least obvious. If it changes the sound, undo it in the
+synth and set the range there by hand instead.
 
 ### It does nothing at all when it is doing nothing
 
@@ -52,29 +83,6 @@ instrument sounds exactly as it does with the plugin taken off the strip.
 
 This matters beyond tidiness — it previously swallowed pitch bend coming from
 the region or your keyboard even while idle.
-
-### Getting the semitones exactly right
-
-If bends land close but not quite on the note, the synth's real bend range is
-not quite the one it reports. **FINE** corrects it: the value is "the synth's
-real range is this many cents wider than it claims", and it is applied to the
-range used for encoding rather than to the bend value itself.
-
-That distinction matters. Scaling the value looks equivalent, and is in the
-middle of the range, but a full-range bend plus a correction falls outside the
-range and clamps to the rail — so the trim did nothing at exactly the point
-where the error is largest and where anyone would test it.
-
-**Press Calibrate** rather than guessing. It plays two notes in turn: a
-reference note, and the same pitch reached by bending. If the range is right
-they are identical; if not you hear the pitch jump between them. Turn FINE until
-the jump disappears. Matching two pitches against each other resolves far finer
-than judging one in isolation — a couple of cents is obvious this way and
-inaudible otherwise.
-
-If turning FINE *down* never fixes it, the synth's real range is **smaller**
-than RANGE, and the bend is physically unable to reach the target. Lower RANGE
-and the synth's setting together.
 
 The other classic failures are handled too:
 
@@ -90,17 +98,15 @@ The other classic failures are handled too:
 
 | Knob | What it does |
 | --- | --- |
-| **RANGE** | How far the synth is allowed to bend, 1–48 semitones. Set this to match what the synth is set to. |
-| **FINE** | Corrects a synth whose real bend range does not quite match its setting, in cents. Use **Calibrate** to set it by ear. |
+| **RANGE** | **The bend range your synth is set to.** The one setting everything depends on — see below. |
 | **CURVE** | Leans every slide towards moving early or late, without editing any points. |
 | **SNAP** | Fully clockwise locks to whole semitones. Anticlockwise loosens it, for bends that deliberately sit just under the note. |
 | **MIX** | Scales the whole effect, 0% to 100%. |
 
-**Send bend range to synth** — **off by default, and it should usually stay
-off.** See below.
+**Calibrate** — finds the bend range your synth is really set to. See below.
 
-**Calibrate** — plays a reference note and a bent note in turn so you can set
-FINE precisely. See below.
+**Set synth range** — asks the synth to change its range to RANGE, once, now.
+Many synths ignore it. See below.
 
 **Clear points** — throws away the whole curve and starts again.
 

@@ -4,11 +4,9 @@
 namespace ids
 {
     const juce::String range = "range";
-    const juce::String fine  = "fine";
     const juce::String curve = "curve";
     const juce::String snap  = "snap";
     const juce::String mix   = "mix";
-    const juce::String rpn   = "sendRPN";
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout SnapBendProcessor::createParameterLayout()
@@ -17,21 +15,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout SnapBendProcessor::createPar
 
     AudioProcessorValueTreeState::ParameterLayout layout;
 
-    // 12 semitones by default rather than the MIDI-standard 2: an octave is
-    // enough for almost any musical bend, and every value on the grid is then
-    // reachable.
+    // This must match the synth's own bend range setting. Fractional values are
+    // allowed because a synth's true range is not always the round number it
+    // displays, and Calibrate is how you find the real one.
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { ids::range, 1 }, "Range",
-        NormalisableRange<float> (1.0f, 48.0f, 1.0f), 12.0f,
+        NormalisableRange<float> (1.0f, 48.0f, 0.01f), 12.0f,
         AudioParameterFloatAttributes().withLabel ("semitones")));
-
-    // Corrects a synth whose real bend range does not match the one it claims.
-    // Expressed in cents at full bend, because that is where you can hear it
-    // and therefore where you will be listening while you set it.
-    layout.add (std::make_unique<AudioParameterFloat> (
-        ParameterID { ids::fine, 1 }, "Fine",
-        NormalisableRange<float> (-100.0f, 100.0f, 1.0f), 0.0f,
-        AudioParameterFloatAttributes().withLabel ("cents")));
 
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { ids::curve, 1 }, "Curve",
@@ -44,12 +34,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout SnapBendProcessor::createPar
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { ids::mix, 1 }, "Mix",
         NormalisableRange<float> (0.0f, 1.0f, 0.01f), 1.0f));
-
-    // Off by default: this is carried on CC 6 and CC 38, and synths that do not
-    // implement RPN will apply those to whatever they happen to be mapped to,
-    // altering the patch the moment the plugin loads.
-    layout.add (std::make_unique<AudioParameterBool> (
-        ParameterID { ids::rpn, 1 }, "Send Bend Range To Synth", false));
 
     return layout;
 }
@@ -142,10 +126,8 @@ void SnapBendProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     snapbend::EmitterSettings settings;
     settings.enabled            = active;
     settings.bendRangeSemitones = apvts.getRawParameterValue (ids::range)->load();
-    settings.fineTuneCents      = apvts.getRawParameterValue (ids::fine)->load();
     settings.shapeBias          = apvts.getRawParameterValue (ids::curve)->load();
     settings.depth              = mix;
-    settings.sendRangeRPN       = apvts.getRawParameterValue (ids::rpn)->load() > 0.5f;
     settings.channel            = 1;
     emitter.setSettings (settings);
 
@@ -187,6 +169,14 @@ void SnapBendProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         events = safetyResetPending.exchange (false)
                    ? emitter.makeSafetyReset()
                    : emitter.processBlock (localCurve, transport, numSamples);
+    }
+
+    // The one place CC 6 / CC 38 ever leave this plugin, and only because a
+    // button was pressed.
+    if (rangeAnnouncementPending.exchange (false))
+    {
+        const auto rpn = emitter.makeRangeAnnouncement();
+        events.insert (events.begin(), rpn.begin(), rpn.end());
     }
 
     for (const auto& event : events)

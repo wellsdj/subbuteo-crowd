@@ -76,11 +76,10 @@ SnapBendEditor::SnapBendEditor (SnapBendProcessor& p)
 
     addAndMakeVisible (bendLane);
     addAndMakeVisible (rangeKnob);
-    addAndMakeVisible (fineKnob);
     addAndMakeVisible (curveKnob);
     addAndMakeVisible (snapKnob);
     addAndMakeVisible (mixKnob);
-    addAndMakeVisible (autoRangeButton);
+    addAndMakeVisible (sendRangeButton);
     addAndMakeVisible (clearButton);
     addAndMakeVisible (panicButton);
     addAndMakeVisible (calibrateButton);
@@ -143,12 +142,12 @@ SnapBendEditor::SnapBendEditor (SnapBendProcessor& p)
     calibrateButton.setClickingTogglesState (true);
     calibrateButton.setColour (juce::TextButton::buttonOnColourId, snapbend::colours::accent);
     calibrateButton.setTooltip (
-        "Plays two notes over and over: a reference note, then the same pitch "
-        "reached by bending.\n\n"
-        "If the synth's bend range is right they sound identical. If you hear "
-        "the pitch jump between them, turn FINE until the jump disappears.\n\n"
-        "If turning FINE down never fixes it, the synth's real range is smaller "
-        "than RANGE — lower both.");
+        "Finds the bend range your synth is actually set to.\n\n"
+        "Plays a reference note and the same pitch reached by bending, over and "
+        "over. Turn RANGE until the two stop jumping: RANGE then reads your "
+        "synth's real range, and every semitone on the grid becomes exact.\n\n"
+        "If that number is smaller than you want, raise the bend range in the "
+        "synth itself and calibrate again.");
 
     calibrateButton.onClick = [this]
     {
@@ -156,24 +155,23 @@ SnapBendEditor::SnapBendEditor (SnapBendProcessor& p)
         bendLane.setCalibrating (calibrateButton.getToggleState());
     };
 
-    autoRangeButton.setTooltip (
-        "Sends the bend range to the synth over MIDI (RPN, on CC 6 and CC 38).\n\n"
-        "Leave this off unless you know the synth handles RPN: those CCs will "
-        "otherwise be applied to whatever they are mapped to, which can change "
-        "the patch. With it off, set the bend range in the synth by hand.");
+    sendRangeButton.onClick = [this] { processor.requestRangeAnnouncement(); };
+    sendRangeButton.setTooltip (
+        "Asks the synth to set its bend range to RANGE, once, now (MIDI RPN).\n\n"
+        "Many synths ignore this — it rides on CC 6 and CC 38, which some will "
+        "apply to whatever those are mapped to instead. If pressing it changes "
+        "the sound, undo it in the synth and set the bend range there by hand.");
 
-    fineKnob.getSlider().setTooltip (
-        "Corrects a synth whose real bend range does not quite match its "
-        "setting. Bend all the way down, then turn this until the note is in "
-        "tune — measured in cents at full bend.");
+    rangeKnob.getSlider().setTooltip (
+        "The bend range your synth is set to. This has to match, or no bend "
+        "can land on the right note — pitch bend carries a fraction of a "
+        "range, not a pitch.\n\n"
+        "Press Calibrate to find out what your synth is really set to.");
 
     rangeAttachment = std::make_unique<SliderAttachment> (processor.apvts, "range", rangeKnob.getSlider());
-    fineAttachment  = std::make_unique<SliderAttachment> (processor.apvts, "fine",  fineKnob.getSlider());
     curveAttachment = std::make_unique<SliderAttachment> (processor.apvts, "curve", curveKnob.getSlider());
     snapAttachment  = std::make_unique<SliderAttachment> (processor.apvts, "snap",  snapKnob.getSlider());
     mixAttachment   = std::make_unique<SliderAttachment> (processor.apvts, "mix",   mixKnob.getSlider());
-
-    autoRangeAttachment = std::make_unique<ButtonAttachment> (processor.apvts, "sendRPN", autoRangeButton);
 
     setResizable (true, true);
     setResizeLimits (620, 440, 1600, 1100);
@@ -202,7 +200,6 @@ void SnapBendEditor::timerCallback()
     bendLane.setShapeBias (curve);
 
     rangeKnob.updateReadout();
-    fineKnob.updateReadout();
     curveKnob.updateReadout();
     snapKnob.updateReadout();
     mixKnob.updateReadout();
@@ -288,8 +285,8 @@ void SnapBendEditor::resized()
     // knob is centred in its own, so nothing ever bunches up at one end.
     auto knobRow = area.removeFromBottom (118).reduced (20, 12);
 
-    LabelledKnob* knobs[] { &rangeKnob, &fineKnob, &curveKnob, &snapKnob, &mixKnob };
-    constexpr int numKnobs = 5;
+    LabelledKnob* knobs[] { &rangeKnob, &curveKnob, &snapKnob, &mixKnob };
+    constexpr int numKnobs = 4;
 
     const int columnWidth = knobRow.getWidth() / numKnobs;
     const int knobWidth   = juce::jmin (110, columnWidth - 24);
@@ -313,7 +310,7 @@ void SnapBendEditor::resized()
 
     calibrateButton.setBounds (strip.removeFromLeft (92));
     strip.removeFromLeft (14);
-    autoRangeButton.setBounds (strip);
+    sendRangeButton.setBounds (strip.removeFromLeft (128));
 
     // ---- the lane -------------------------------------------------------
     bendLane.setBounds (area.reduced (20, 10).withTrimmedBottom (2));

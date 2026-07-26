@@ -61,12 +61,12 @@ private:
     RangeWarningPanel rangeWarning;
     ZoomControls      zoomControls;
 
-    LabelledKnob rangeKnob { "RANGE", [] (double v) { return juce::String (juce::roundToInt (v)) + " st"; } };
-    LabelledKnob fineKnob  { "FINE",  [] (double v)
+    LabelledKnob rangeKnob { "RANGE", [] (double v)
                              {
-                                 const int cents = juce::roundToInt (v);
-                                 if (cents == 0) return juce::String ("0");
-                                 return (cents > 0 ? "+" : "") + juce::String (cents) + " c";
+                                 // Whole numbers are the common case and read
+                                 // more cleanly without trailing zeroes.
+                                 const bool whole = std::abs (v - std::round (v)) < 0.005;
+                                 return juce::String (v, whole ? 0 : 2) + " st";
                              } };
     LabelledKnob curveKnob { "CURVE", [] (double v)
                              {
@@ -82,7 +82,7 @@ private:
                              } };
     LabelledKnob mixKnob   { "MIX",   [] (double v) { return juce::String (juce::roundToInt (v * 100.0)) + "%"; } };
 
-    juce::ToggleButton autoRangeButton { "Send bend range to synth" };
+    juce::TextButton   sendRangeButton { "Set synth range" };
 
     // Two separate jobs that were previously conflated under one "Reset bend"
     // button: throwing away the drawn points, and un-bending a stuck synth.
@@ -91,11 +91,9 @@ private:
     juce::TextButton   calibrateButton { "Calibrate" };
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
-    using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
 
-    std::unique_ptr<SliderAttachment> rangeAttachment, fineAttachment, curveAttachment,
+    std::unique_ptr<SliderAttachment> rangeAttachment, curveAttachment,
                                       snapAttachment, mixAttachment;
-    std::unique_ptr<ButtonAttachment> autoRangeAttachment;
 
     /** The furthest excursion we last warned about, so the prompt does not pop
         back up every time the mouse twitches after being dismissed. */

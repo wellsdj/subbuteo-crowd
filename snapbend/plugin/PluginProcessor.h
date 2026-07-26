@@ -71,7 +71,12 @@ public:
         whenever the plugin is bypassed, so nothing is left detuned. */
     void requestSafetyReset() noexcept { safetyResetPending.store (true); }
 
-    /** Plays the alternating reference/bent note pair used to set FINE by ear. */
+    /** Sends the RPN handshake once, on demand, telling the synth what bend
+        range to use. Never automatic — see BendEmitter::makeRangeAnnouncement. */
+    void requestRangeAnnouncement() noexcept { rangeAnnouncementPending.store (true); }
+
+    /** Plays the alternating reference/bent note pair used to find the synth's
+        real bend range by ear. */
     void setCalibrating (bool shouldCalibrate) noexcept { calibrating.store (shouldCalibrate); }
     bool isCalibrating() const noexcept { return calibrating.load(); }
 
@@ -95,6 +100,7 @@ private:
     std::atomic<bool>   transportRunning   { false };
     std::atomic<bool>   safetyResetPending { false };
     std::atomic<bool>   calibrating        { false };
+    std::atomic<bool>   rangeAnnouncementPending { false };
     bool                wasCalibrating     = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SnapBendProcessor)

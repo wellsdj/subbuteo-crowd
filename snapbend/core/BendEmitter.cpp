@@ -16,7 +16,6 @@ void BendEmitter::reset()
 {
     lastSentBend = -1;
     wasPlaying   = false;
-    rangeSent    = false;
     wasEnabled   = false;
 }
 
@@ -31,7 +30,6 @@ void BendEmitter::setSettings (const EmitterSettings& newSettings)
                                               maxBendRangeSemitones);
     settings.depth            = std::clamp (settings.depth, 0.0, 1.0);
     settings.shapeBias        = std::clamp (settings.shapeBias, -1.0, 1.0);
-    settings.fineTuneCents    = std::clamp (settings.fineTuneCents, -100.0, 100.0);
     settings.channel          = std::clamp (settings.channel, 1, 16);
     settings.updateIntervalMs = std::max (0.1, settings.updateIntervalMs);
 
@@ -39,7 +37,6 @@ void BendEmitter::setSettings (const EmitterSettings& newSettings)
     {
         // The semitone-to-14-bit mapping just changed underneath us, so the
         // cached value is meaningless and the synth needs telling again.
-        rangeSent    = false;
         lastSentBend = -1;
     }
 }
@@ -120,28 +117,24 @@ std::vector<RawMidiEvent> BendEmitter::processCalibrationBlock (int numSamples)
     // Calibration owns the bend while it runs, so normal playback has to
     // re-assert everything when it takes over again.
     lastSentBend = -1;
-    rangeSent    = false;
 
     return events;
 }
 
 double BendEmitter::getEffectiveRange() const noexcept
 {
-    // The trim belongs on the range we *encode against*, not on the value being
-    // encoded.
-    //
-    // Scaling the value instead looks equivalent — and is, in the middle — but
-    // it breaks at exactly the point where the error is largest. Ask for the
-    // full range plus a correction and the result falls outside the range, so
-    // it clamps to the rail and the correction is thrown away. The trim then
-    // does nothing at full bend, which is the one place anyone tests it.
-    //
-    // Adjusting the assumed range instead means FINE is simply "the synth's
-    // real range is this many cents wider than it claims", the encoded value
-    // stays comfortably inside the rails, and the correction holds everywhere.
-    return std::clamp (settings.bendRangeSemitones + settings.fineTuneCents / 100.0,
+    return std::clamp (settings.bendRangeSemitones,
                        minBendRangeSemitones,
                        maxBendRangeSemitones);
+}
+
+std::vector<RawMidiEvent> BendEmitter::makeRangeAnnouncement()
+{
+    // The synth's mapping from bend value to pitch is about to change, so
+    // whatever we last sent no longer means what it meant.
+    lastSentBend = -1;
+
+    return buildPitchBendRangeRPN (getEffectiveRange(), settings.channel, 0);
 }
 
 std::vector<RawMidiEvent> BendEmitter::makeSafetyReset()
@@ -177,7 +170,6 @@ std::vector<RawMidiEvent> BendEmitter::processBlock (const BendCurve&     curve,
         }
 
         // Make sure switching back on re-announces everything from scratch.
-        rangeSent  = false;
         wasPlaying = false;
 
         return events;
@@ -201,23 +193,7 @@ std::vector<RawMidiEvent> BendEmitter::processBlock (const BendCurve&     curve,
         return events;
     }
 
-    // ---- playback just started --------------------------------------------
-    if (! wasPlaying)
-    {
-        wasPlaying = true;
-
-        // Re-assert on every start: the user may have reloaded the synth, or
-        // another plugin may have moved the parameter since we last spoke.
-        rangeSent = false;
-    }
-
-    if (settings.sendRangeRPN && ! rangeSent)
-    {
-        const auto rpn = buildPitchBendRangeRPN (settings.bendRangeSemitones,
-                                                 settings.channel, 0);
-        events.insert (events.end(), rpn.begin(), rpn.end());
-        rangeSent = true;
-    }
+    wasPlaying = true;
 
     // ---- the bend itself ---------------------------------------------------
     const double bpm            = transport.bpm > 0.0 ? transport.bpm : 120.0;

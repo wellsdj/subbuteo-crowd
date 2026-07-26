@@ -541,13 +541,14 @@ void BendLaneComponent::paint (juce::Graphics& g)
 
         g.setColour (colours::accent);
         g.setFont (juce::Font (juce::FontOptions (15.0f, juce::Font::bold)));
-        g.drawText ("Calibrating", text.removeFromTop (22.0f),
+        g.drawText ("Finding your synth's bend range", text.removeFromTop (22.0f),
                     juce::Justification::centred, false);
 
         g.setColour (colours::text);
         g.setFont (juce::Font (juce::FontOptions (12.5f)));
         g.drawFittedText ("Two notes are playing in turn. They should be the same pitch.\n"
-                          "If you hear the pitch jump between them, turn FINE until it stops.",
+                          "Turn RANGE until they stop jumping — that is what your synth is set to.\n"
+                          "Want more than that? Raise the bend range in the synth, then calibrate again.",
                           text.toNearestInt(), juce::Justification::centredTop, 3);
     }
 }
