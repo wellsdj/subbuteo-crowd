@@ -1267,7 +1267,7 @@
       <button class="panel-status-btn" id="replayCamBtn" onclick="toggleReplaySection()">
         <span id="replayCamLabel">STANDBY</span>
       </button>
-      <button class="var-btn" id="varBtn" onclick="triggerVAR()">VAR</button>
+      <button class="var-btn" id="varBtn" onclick="varClick()">VAR</button>
     </div>
 
   </div>
@@ -1296,6 +1296,9 @@
       </button>
       <button class="r-btn" onclick="triggerReaction('save', this)">
         <span class="r-icon">&#x1F9E4;</span><span class="r-label">GREAT SAVE</span><kbd>S</kbd>
+      </button>
+      <button class="r-btn r-var" onclick="varClick()">
+        <span class="r-icon">&#x1F4FA;</span><span class="r-label">VAR</span><kbd>V</kbd>
       </button>
     </div>
   </div>
@@ -1777,6 +1780,12 @@ function showSaveReplay(type) {
 
 // VAR review button (camera screen) — instant replay of the last 10s
 // ending at the click. No sound, no highlights save.
+// Clicked VAR: explain instead of silently doing nothing when there's no footage.
+function varClick() {
+  if (!replaySectionActive) { showToast('VAR needs the replay camera recording — start Replay Cam first'); return; }
+  triggerVAR();
+}
+
 function triggerVAR() {
   if (!replaySectionActive) return;
   logEvent('VAR review', 'var');
@@ -2893,7 +2902,7 @@ function updateReplaySectionUI() {
   const varBtn = document.getElementById('varBtn');
   if (varBtn) varBtn.classList.toggle('enabled', replaySectionActive);
   const rsVar = document.getElementById('rsVarBtn');
-  if (rsVar) rsVar.disabled = !replaySectionActive;
+  if (rsVar) rsVar.classList.toggle('enabled', replaySectionActive);
   if (replaySectionActive) {
     btn.textContent = 'STOP RECORDING';
     btn.classList.add('stop');
@@ -2980,7 +2989,7 @@ function updateReplaySectionUI() {
       <option value="">Select camera...</option>
     </select>
     <button class="rs-start-btn" id="rsStartBtn" onclick="toggleReplaySection()">START RECORDING</button>
-    <button class="rs-var-btn" id="rsVarBtn" onclick="triggerVAR()" disabled>VAR <kbd>V</kbd></button>
+    <button class="rs-var-btn" id="rsVarBtn" onclick="varClick()">VAR <kbd>V</kbd></button>
   </div>
 </div>
 

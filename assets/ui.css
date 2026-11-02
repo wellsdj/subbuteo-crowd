@@ -272,3 +272,14 @@ kbd {
 /* Crowd started but the browser is still blocking sound until a click */
 .play-btn.blocked { background: rgba(255, 197, 61, 0.14); border-color: var(--gold); color: var(--gold); animation: blockedPulse 1.6s ease-in-out infinite; }
 @keyframes blockedPulse { 50% { box-shadow: 0 0 0 6px rgba(255, 197, 61, 0.15); } }
+
+/* VAR reaction button (always clickable; dimmed until the replay cam records) */
+.reactions-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.r-btn.r-var { border-color: rgba(255, 197, 61, 0.35); background: linear-gradient(180deg, rgba(255, 197, 61, 0.12), var(--panel)); }
+.r-btn.r-var .r-label { color: var(--gold); }
+.var-btn { pointer-events: auto; opacity: 0.55; }
+.var-btn.enabled { opacity: 1; }
+.rs-var-btn { opacity: 0.55; }
+.rs-var-btn.enabled { opacity: 1; }
+@media (max-width: 900px) { .reactions-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .reactions-grid { grid-template-columns: 1fr; } }
