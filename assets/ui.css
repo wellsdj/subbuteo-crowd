@@ -268,3 +268,7 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* Crowd started but the browser is still blocking sound until a click */
+.play-btn.blocked { background: rgba(255, 197, 61, 0.14); border-color: var(--gold); color: var(--gold); animation: blockedPulse 1.6s ease-in-out infinite; }
+@keyframes blockedPulse { 50% { box-shadow: 0 0 0 6px rgba(255, 197, 61, 0.15); } }

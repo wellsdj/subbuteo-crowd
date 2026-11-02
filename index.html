@@ -1304,7 +1304,7 @@
   <div class="feed-section">
     <div class="section-label">MATCH FEED</div>
     <ul class="feed-list" id="feedList">
-      <li class="feed-empty" id="feedEmpty">Goals, saves and VAR calls will appear here. Say “goal”, raise a fist, or press G / N / S / V.</li>
+      <li class="feed-empty" id="feedEmpty">Goals, saves and VAR calls will appear here. Say “goal”, raise a fist (✋ hold an open palm for VAR), or press G / N / S / V.</li>
     </ul>
   </div>
 
@@ -1350,8 +1350,18 @@ function currentVolume() {
 }
 // Browsers keep the AudioContext suspended until a click/keypress; resume on the first one.
 ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, () => {
-  if (ctx && ctx.state === 'suspended') ctx.resume();
+  if (ctx && ctx.state === 'suspended') ctx.resume().then(updateCrowdButton);
 }, { capture: true }));
+
+// Don't claim "CROWD ACTIVE" while the browser is still blocking sound.
+function updateCrowdButton() {
+  const btn = document.getElementById('crowdBtn');
+  const txt = document.getElementById('crowdBtnText');
+  const blocked = isPlaying && ctx && ctx.state !== 'running';
+  btn.classList.toggle('active', isPlaying && !blocked);
+  btn.classList.toggle('blocked', !!blocked);
+  txt.innerHTML = !isPlaying ? '&#x25B6; CROWD OFF' : blocked ? '&#x1F507; TAP TO HEAR CROWD' : '&#x25A0; CROWD ACTIVE';
+}
 
 function startCrowd() {
   if (!ctx || crowdSource || !crowdBuffer) return;
@@ -1523,14 +1533,16 @@ async function toggleCrowd() {
   const btn = document.getElementById('crowdBtn');
   const btnText = document.getElementById('crowdBtnText');
   try { await initAudio(); } catch (e) { showToast('Could not load crowd audio'); return; }
-  if (!isPlaying) {
+  if (isPlaying && ctx.state !== 'running') {
+    // Blocked by autoplay: this click unlocks sound instead of turning the crowd off.
+    await ctx.resume();
+  } else if (!isPlaying) {
     startCrowd(); isPlaying = true;
-    btnText.innerHTML = '&#x25A0; CROWD ACTIVE'; btn.classList.add('active');
     currentExcitement = 0.5;
   } else {
     stopCrowd(); isPlaying = false;
-    btnText.innerHTML = '&#x25B6; CROWD OFF'; btn.classList.remove('active');
   }
+  updateCrowdButton();
   updateActivityDots();
 }
 
@@ -2419,7 +2431,10 @@ const GESTURE_MAP = {
   'Victory':     'nearmiss',
   'Pointing_Up':  'nearmiss',
   'Thumb_Up':    'save',
+  'Open_Palm':   'var',   // held briefly — open hands happen by accident
 };
+const VAR_HOLD_MS = 600;
+let palmSince = 0;
 
 async function initGestureRecognizer() {
   const { GestureRecognizer, FilesetResolver } = await import(
@@ -2680,7 +2695,18 @@ function runGestureLoop() {
       const name = top.categoryName;
       const score = top.score;
       document.getElementById('gestureTag').textContent = score > 0.75 ? name.replace('_', ' ') : '';
-      if (score > 0.85) {
+      if (name === 'Open_Palm' && score > 0.85) {
+        const now = Date.now();
+        if (!palmSince) palmSince = now;
+        if (now - palmSince >= VAR_HOLD_MS && now - lastGestureTime > GESTURE_COOLDOWN) {
+          lastGestureTime = now; palmSince = 0;
+          if (replaySectionActive) triggerVAR();
+          else showToast('VAR needs the replay camera — start it first');
+        }
+      } else {
+        palmSince = 0;
+      }
+      if (score > 0.85 && name !== 'Open_Palm') {
         const now = Date.now();
         if (now - lastGestureTime > GESTURE_COOLDOWN) {
           const reaction = GESTURE_MAP[name];
@@ -2694,6 +2720,7 @@ function runGestureLoop() {
       }
     } else {
       document.getElementById('gestureTag').textContent = '';
+      palmSince = 0;
     }
   }
   gestureAnimFrame = requestAnimationFrame(runGestureLoop);
