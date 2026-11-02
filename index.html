@@ -1304,7 +1304,7 @@
   <div class="feed-section">
     <div class="section-label">MATCH FEED</div>
     <ul class="feed-list" id="feedList">
-      <li class="feed-empty" id="feedEmpty">Goals, saves and VAR calls will appear here. Say “goal”, raise a fist (✋ hold an open palm for VAR), or press G / N / S / V.</li>
+      <li class="feed-empty" id="feedEmpty">Goals, saves and VAR calls will appear here. Say “goal”, raise a fist (👀 look left-right-left for VAR), or press G / N / S / V.</li>
     </ul>
   </div>
 
@@ -2428,16 +2428,63 @@ const GESTURE_COOLDOWN = 3000;
 
 const GESTURE_MAP = {
   'Closed_Fist': 'goal',
-  'Victory':     'nearmiss',
   'Pointing_Up':  'nearmiss',
   'Thumb_Up':    'save',
-  'Open_Palm':   'var',   // held briefly — open hands happen by accident
 };
-const VAR_HOLD_MS = 600;
-let palmSince = 0;
+
+// ── Eye tracking: look left-right-left (or right-left-right) quickly → VAR ──
+let faceLandmarker = null;
+const LOOK_THRESHOLD = 0.32;   // how far the eyes/head must turn to count as a look
+const LOOK_SWITCHES = 3;       // L→R→L→R = 3 side changes, a deliberate "scan"
+const LOOK_WINDOW_MS = 2500;
+let lookSide = 0;              // -1 / 0 / 1
+let lookSwitches = [];         // timestamps of side changes
+
+async function initFaceLandmarker(vision, FaceLandmarker) {
+  faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+      delegate: 'GPU'
+    },
+    runningMode: 'VIDEO',
+    numFaces: 1,
+    outputFaceBlendshapes: true
+  });
+}
+
+// Horizontal gaze from eye blendshapes plus head yaw from landmarks. Only the
+// alternation matters, so which way counts as "left" is irrelevant.
+function horizontalLook(result) {
+  const shapes = result.faceBlendshapes && result.faceBlendshapes[0];
+  const lm = result.faceLandmarks && result.faceLandmarks[0];
+  if (!shapes || !lm) return null;
+  const b = {};
+  shapes.categories.forEach(c => { b[c.categoryName] = c.score; });
+  const eyes = ((b.eyeLookInLeft || 0) + (b.eyeLookOutRight || 0) - (b.eyeLookOutLeft || 0) - (b.eyeLookInRight || 0)) / 2;
+  const width = lm[454].x - lm[234].x;                                // cheek to cheek
+  const yaw = width ? ((lm[1].x - lm[234].x) / width - 0.5) * 2 : 0;  // nose offset, -1..1
+  return eyes + yaw * 1.5;
+}
+
+function trackLookScan(now) {
+  const video = document.getElementById('gestureVideo');
+  const h = horizontalLook(faceLandmarker.detectForVideo(video, now));
+  if (h == null) { lookSide = 0; return; }
+  const side = h > LOOK_THRESHOLD ? 1 : h < -LOOK_THRESHOLD ? -1 : 0;
+  if (side === 0 || side === lookSide) return;
+  if (lookSide !== 0) lookSwitches.push(now);
+  lookSide = side;
+  lookSwitches = lookSwitches.filter(t => now - t < LOOK_WINDOW_MS);
+  document.getElementById('gestureTag').textContent = '👀 ' + '•'.repeat(lookSwitches.length + 1);
+  if (lookSwitches.length >= LOOK_SWITCHES && now - lastVarTime > VAR_COOLDOWN) {
+    lastVarTime = now; lookSwitches = []; lookSide = 0;
+    if (replaySectionActive) triggerVAR();
+    else showToast('VAR needs the replay camera — start it first');
+  }
+}
 
 async function initGestureRecognizer() {
-  const { GestureRecognizer, FilesetResolver } = await import(
+  const { GestureRecognizer, FaceLandmarker, FilesetResolver } = await import(
     'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs'
   );
   const vision = await FilesetResolver.forVisionTasks(
@@ -2451,6 +2498,9 @@ async function initGestureRecognizer() {
     runningMode: 'VIDEO',
     numHands: 1
   });
+  // Eye tracking is a bonus: if its model fails to load, hand gestures still work.
+  try { await initFaceLandmarker(vision, FaceLandmarker); }
+  catch (e) { showToast('Eye tracking unavailable — hand gestures still work'); }
 }
 
 function isBuiltInCamera(label) {
@@ -2695,18 +2745,7 @@ function runGestureLoop() {
       const name = top.categoryName;
       const score = top.score;
       document.getElementById('gestureTag').textContent = score > 0.75 ? name.replace('_', ' ') : '';
-      if (name === 'Open_Palm' && score > 0.85) {
-        const now = Date.now();
-        if (!palmSince) palmSince = now;
-        if (now - palmSince >= VAR_HOLD_MS && now - lastGestureTime > GESTURE_COOLDOWN) {
-          lastGestureTime = now; palmSince = 0;
-          if (replaySectionActive) triggerVAR();
-          else showToast('VAR needs the replay camera — start it first');
-        }
-      } else {
-        palmSince = 0;
-      }
-      if (score > 0.85 && name !== 'Open_Palm') {
+      if (score > 0.85) {
         const now = Date.now();
         if (now - lastGestureTime > GESTURE_COOLDOWN) {
           const reaction = GESTURE_MAP[name];
@@ -2720,8 +2759,8 @@ function runGestureLoop() {
       }
     } else {
       document.getElementById('gestureTag').textContent = '';
-      palmSince = 0;
     }
+    if (faceLandmarker) { try { trackLookScan(Date.now() + 1); } catch (e) {} }
   }
   gestureAnimFrame = requestAnimationFrame(runGestureLoop);
 }
