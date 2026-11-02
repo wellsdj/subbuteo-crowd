@@ -1304,7 +1304,7 @@
   <div class="feed-section">
     <div class="section-label">MATCH FEED</div>
     <ul class="feed-list" id="feedList">
-      <li class="feed-empty" id="feedEmpty">Goals, saves and VAR calls will appear here. Say “goal”, raise a fist (👀 look left-right-left for VAR), or press G / N / S / V.</li>
+      <li class="feed-empty" id="feedEmpty">Goals, saves and VAR calls will appear here. Say “goal”, raise a fist (shake your head for VAR), or press G / N / S / V.</li>
     </ul>
   </div>
 
@@ -2432,11 +2432,11 @@ const GESTURE_MAP = {
   'Thumb_Up':    'save',
 };
 
-// ── Eye tracking: look left-right-left (or right-left-right) quickly → VAR ──
+// ── Head shake → VAR: turn the head side to side quickly at the gesture camera ──
 let faceLandmarker = null;
-const LOOK_THRESHOLD = 0.32;   // how far the eyes/head must turn to count as a look
-const LOOK_SWITCHES = 3;       // L→R→L→R = 3 side changes, a deliberate "scan"
-const LOOK_WINDOW_MS = 2500;
+const LOOK_THRESHOLD = 0.22;   // head yaw (nose offset, -1..1) needed to count as turned
+const LOOK_SWITCHES = 3;       // L→R→L→R = 3 side changes, a deliberate shake
+const LOOK_WINDOW_MS = 2000;
 let lookSide = 0;              // -1 / 0 / 1
 let lookSwitches = [];         // timestamps of side changes
 
@@ -2447,23 +2447,17 @@ async function initFaceLandmarker(vision, FaceLandmarker) {
       delegate: 'GPU'
     },
     runningMode: 'VIDEO',
-    numFaces: 1,
-    outputFaceBlendshapes: true
+    numFaces: 1
   });
 }
 
-// Horizontal gaze from eye blendshapes plus head yaw from landmarks. Only the
+// Head yaw from landmarks: where the nose sits between the cheeks. Only the
 // alternation matters, so which way counts as "left" is irrelevant.
 function horizontalLook(result) {
-  const shapes = result.faceBlendshapes && result.faceBlendshapes[0];
   const lm = result.faceLandmarks && result.faceLandmarks[0];
-  if (!shapes || !lm) return null;
-  const b = {};
-  shapes.categories.forEach(c => { b[c.categoryName] = c.score; });
-  const eyes = ((b.eyeLookInLeft || 0) + (b.eyeLookOutRight || 0) - (b.eyeLookOutLeft || 0) - (b.eyeLookInRight || 0)) / 2;
-  const width = lm[454].x - lm[234].x;                                // cheek to cheek
-  const yaw = width ? ((lm[1].x - lm[234].x) / width - 0.5) * 2 : 0;  // nose offset, -1..1
-  return eyes + yaw * 1.5;
+  if (!lm) return null;
+  const width = lm[454].x - lm[234].x;                               // cheek to cheek
+  return width ? ((lm[1].x - lm[234].x) / width - 0.5) * 2 : null;   // -1..1
 }
 
 function trackLookScan(now) {
@@ -2475,7 +2469,7 @@ function trackLookScan(now) {
   if (lookSide !== 0) lookSwitches.push(now);
   lookSide = side;
   lookSwitches = lookSwitches.filter(t => now - t < LOOK_WINDOW_MS);
-  document.getElementById('gestureTag').textContent = '👀 ' + '•'.repeat(lookSwitches.length + 1);
+  document.getElementById('gestureTag').textContent = '↔ ' + '•'.repeat(lookSwitches.length + 1);
   if (lookSwitches.length >= LOOK_SWITCHES && now - lastVarTime > VAR_COOLDOWN) {
     lastVarTime = now; lookSwitches = []; lookSide = 0;
     if (replaySectionActive) triggerVAR();
@@ -2498,9 +2492,9 @@ async function initGestureRecognizer() {
     runningMode: 'VIDEO',
     numHands: 1
   });
-  // Eye tracking is a bonus: if its model fails to load, hand gestures still work.
+  // Head tracking is a bonus: if its model fails to load, hand gestures still work.
   try { await initFaceLandmarker(vision, FaceLandmarker); }
-  catch (e) { showToast('Eye tracking unavailable — hand gestures still work'); }
+  catch (e) { showToast('Head-shake VAR unavailable — hand gestures still work'); }
 }
 
 function isBuiltInCamera(label) {
