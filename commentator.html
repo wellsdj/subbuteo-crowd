@@ -435,6 +435,25 @@
   /* input/context screens keep centered layout */
   #inputScreen, #contextScreen { align-items: center; }
 
+  /* ── Broadcast UI refresh (matches assets/ui.css) ── */
+  body { font-family:'Inter','Rajdhani',sans-serif; background:#060b17; }
+  .grid, .scanlines, .particles { display:none; }
+  .bg { background: radial-gradient(1000px 500px at 70% -10%, rgba(91,140,255,.10), transparent 60%), radial-gradient(800px 500px at 10% 110%, rgba(46,229,157,.08), transparent 60%), #060b17; }
+  .card, .ctx-card, .comm-panel, .loading-overlay, .btn-shell, .btn-ring, .ctrl-inner, .ctrl-ring, .inp, .score-inp, .notes-inp, .status-chip, .comm-status-tag, .suggestion { clip-path:none !important; }
+  .card, .ctx-card, .comm-panel { border-radius:20px; border-color:rgba(255,255,255,.08); background:rgba(15,24,44,.78); box-shadow:0 10px 40px rgba(0,0,0,.35); }
+  .card::before, .ctx-card::before, .comm-panel::before, .c, .pc { display:none; }
+  .loading-overlay { border-radius:20px; }
+  .inp, .score-inp, .notes-inp { border-radius:12px; border-color:rgba(255,255,255,.14); }
+  .btn-shell, .ctrl-inner { border-radius:999px; }
+  .btn-ring, .ctrl-ring { display:none; }
+  .status-chip, .comm-status-tag { border-radius:999px; }
+  .title, .title-glow { filter:none; }
+  .title-glow { display:none; }
+  .comm-line { font-family:'Inter',sans-serif; font-size:15px; font-weight:500; opacity:.9; }
+  .suggestion { border-radius:10px; }
+  html.embedded .hamburger-btn, html.embedded .nav-overlay, html.embedded .nav-sidebar { display:none; }
+  html.embedded .screen { padding-top:24px; padding-bottom:24px; }
+  @media (prefers-reduced-motion: reduce) { * { animation:none !important; } }
 </style>
 </head>
 <body>
@@ -606,7 +625,7 @@
   ">SKIP ▶</div>
 </div>
 
-<div id="musicToggle" class="on" onclick="toggleMusic()">
+<div id="musicToggle" class="on" onclick="toggleMusic()" style="display:none">
   <div class="tog-dot"></div>
   MUSIC
 </div>
@@ -617,6 +636,22 @@ const ANTHROPIC_KEY = ''; // key handled server-side via proxy
 const ELEVEN_KEY    = ''; // key handled server-side via proxy
 const JEFF_VOICE    = 'liJEt1oY77mTW0DVibK3';
 const JOHN_VOICE    = 'whY9eKClucRQxpbTUYsc';
+
+// Running inside the main app's iframe: read the live scoreboard from it.
+const EMBEDDED = window.parent !== window;
+if (EMBEDDED) document.documentElement.classList.add('embedded');
+function parentState() {
+  try { return EMBEDDED && window.parent.getMatchState ? window.parent.getMatchState() : null; } catch (e) { return null; }
+}
+// Pull the first JSON array out of a model reply, tolerating stray prose or code fences.
+function parseScript(text) {
+  const start = text.indexOf('['), end = text.lastIndexOf(']');
+  if (start < 0 || end <= start) throw new Error('No script in reply');
+  const arr = JSON.parse(text.slice(start, end + 1));
+  if (!Array.isArray(arr) || !arr.length) throw new Error('Empty script');
+  return arr.filter(l => l && typeof l.line === 'string' && l.line.trim());
+}
+function replyText(d) { return d.text != null ? d.text : (d.content || []).filter(b => b.type === 'text').map(b => b.text).join(''); }
 
 // ── MATCH STATUS ──
 let matchStatus = 'not_started';
@@ -630,9 +665,8 @@ function selectStatus(s) {
 function getLiveScore() {
   // Read live score from parent scoreboard if running inside the SPA iframe
   try {
-    if (window.parent !== window && typeof window.parent.homeScore === 'number') {
-      return { home: window.parent.homeScore, away: window.parent.awayScore };
-    }
+    const st = parentState();
+    if (st) return { home: st.home, away: st.away };
   } catch(e) {}
   return null;
 }
@@ -724,6 +758,14 @@ document.getElementById('aSug').addEventListener('click', () => {
 });
 
 let homeTeam = '', awayTeam = '';
+(function prefillTeams() {
+  const st = parentState();
+  if (!st) return;
+  const tidy = n => n.charAt(0) + n.slice(1).toLowerCase();
+  if (!hInp.value) hInp.value = tidy(st.homeName);
+  if (!aInp.value) aInp.value = tidy(st.awayName);
+  updateInput();
+})();
 nextBtn.addEventListener('click', () => {
   homeTeam = hInp.value.trim(); awayTeam = aInp.value.trim();
   document.getElementById('inputScreen').classList.add('hidden');
@@ -736,8 +778,10 @@ function backToFixture() {
 }
 
 function goToComm() {
-  document.getElementById('fixtureLabel').innerHTML =
-    `<span>${homeTeam.toUpperCase()}</span> &nbsp;VS&nbsp; <span>${awayTeam.toUpperCase()}</span>`;
+  const fl = document.getElementById('fixtureLabel');
+  const hs = document.createElement('span'); hs.textContent = homeTeam.toUpperCase();
+  const as = document.createElement('span'); as.textContent = awayTeam.toUpperCase();
+  fl.replaceChildren(hs, document.createTextNode('  VS  '), as);
   document.getElementById('contextScreen').classList.add('hidden');
   document.getElementById('commScreen').classList.remove('hidden');
   buildWaves();
@@ -794,10 +838,8 @@ async function generateScript(home, away) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1200, messages: [{ role: 'user', content: prompt }] })
   });
-  if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || 'Anthropic error'); }
-  const data = await res.json();
-  const clean = data.content[0].text.trim().replace(/```json|```/g, '').trim();
-  return JSON.parse(clean);
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || 'AI script error (' + res.status + ')'); }
+  return parseScript(replyText(await res.json()));
 }
 
 // ── ELEVENLABS TTS ──
@@ -842,7 +884,7 @@ let musicFadeTimer = null;
 let musicDelayTimer = null;
 
 // Audio files are optional — fail silently if not present in this deployment
-const crowdAudio = new Audio('crowd sounds good bass.mp3');
+const crowdAudio = new Audio('/audio/crowd.mp3');
 crowdAudio.loop = true; crowdAudio.volume = 0;
 let crowdAvailable = false;
 crowdAudio.addEventListener('canplaythrough', () => { crowdAvailable = true; }, { once: true });
@@ -851,13 +893,13 @@ crowdAudio.addEventListener('error', () => { crowdAvailable = false; });
 const musicAudio = new Audio('tistodriftingofficialmusicvideoyoutube.mp3');
 musicAudio.loop = true; musicAudio.volume = 0;
 let musicAvailable = false;
-musicAudio.addEventListener('canplaythrough', () => { musicAvailable = true; }, { once: true });
+musicAudio.addEventListener('canplaythrough', () => { musicAvailable = true; document.getElementById('musicToggle').style.display = ''; }, { once: true });
 musicAudio.addEventListener('error', () => { musicAvailable = false; });
 
 function initAudioCtx() {
   if (audioStarted) return;
   audioStarted = true;
-  if (crowdAvailable) crowdAudio.play().catch(() => {});
+  crowdAudio.play().then(() => { crowdAvailable = true; setCrowdVolume(CROWD_VOL); }).catch(() => {});
   musicDelayTimer = setTimeout(() => {
     if (musicAvailable) musicAudio.play().catch(() => {});
     setMusicVolume(MUSIC_VOL);
@@ -971,7 +1013,7 @@ async function doWeAreBack() {
         messages: [{ role: 'user', content: 'MATCH CONTEXT: ' + getMatchContext() + '\n\nYou are ' + speaker + ', a live TV football commentator returning from an advert break. The match is ' + homeTeam + ' vs ' + awayTeam + ' at Flanders Stadium. Based on the match context above, write one energetic we-are-back sentence that is accurate to the current match phase. No quotes, no preamble.' }]
       })
     });
-    if (res.ok) { const d = await res.json(); line = d.content[0].text.trim().replace(/^["']|["']$/g, ''); }
+    if (res.ok) { const t = replyText(await res.json()).trim().replace(/^["']|["']$/g, ''); if (t) line = t; }
   } catch(e) {}
 
   setSpeaking(speaker, line);
@@ -1113,9 +1155,7 @@ async function doKickoff() {
       body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 400, messages: [{ role: 'user', content: prompt }] })
     });
     if (res.ok) {
-      const d = await res.json();
-      const clean = d.content[0].text.trim().replace(/```json|```/g, '').trim();
-      kickScript = JSON.parse(clean);
+      kickScript = parseScript(replyText(await res.json()));
     }
   } catch(e) {}
 

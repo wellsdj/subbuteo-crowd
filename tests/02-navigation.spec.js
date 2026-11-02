@@ -67,7 +67,9 @@ test.describe('Navigation', () => {
     await expect(page.locator('#navCrowd')).not.toHaveClass(/active/);
   });
 
-  test('hamburger opens nav sidebar', async ({ page }) => {
+  test('hamburger opens nav sidebar on small screens', async ({ page }) => {
+    // On wide screens the nav is a permanent rail and the hamburger is hidden.
+    await page.setViewportSize({ width: 800, height: 900 });
     await gotoApp(page);
     await page.click('[onclick="openNav()"]');
     await expect(page.locator('#navSidebar')).toHaveClass(/open/);
